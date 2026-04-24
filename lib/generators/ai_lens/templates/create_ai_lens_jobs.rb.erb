@@ -16,8 +16,9 @@ class CreateAiLensJobs < ActiveRecord::Migration<%= migration_version %>
       # Schema snapshot at time of job creation
       t.json :schema_snapshot
 
-      # Job status
+      # Job status and stage tracking
       t.string :status, null: false, default: "pending"
+      t.string :current_stage
       t.datetime :started_at
       t.datetime :completed_at
 

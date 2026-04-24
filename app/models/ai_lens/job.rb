@@ -4,6 +4,8 @@ module AiLens
   class Job < ActiveRecord::Base
     self.table_name = "ai_lens_jobs"
 
+    STAGES = %w[queued encoding analyzing extracting validating applying completed].freeze
+
     belongs_to :identifiable, polymorphic: true
     has_many :feedbacks, class_name: "AiLens::Feedback", dependent: :destroy
 
@@ -46,6 +48,12 @@ module AiLens
     # Validations
     validates :status, presence: true
     validates :adapter, presence: true
+
+    # Stage tracking
+    def update_stage!(stage)
+      update!(current_stage: stage)
+      identifiable&.run_identification_callbacks(:on_stage_change, self, stage) if identifiable&.respond_to?(:run_identification_callbacks)
+    end
 
     # Mark job as processing
     def start_processing!
@@ -119,6 +127,21 @@ module AiLens
       {}
     end
 
+    # Photo tag sets from LLM results
+    def photo_tag_sets
+      @photo_tag_sets ||= parsed_photo_tags.map do |entry|
+        AiLens::PhotoTagSet.new(
+          photo_index: entry["photo_index"],
+          tags: entry["tags"] || [],
+          open_tags: entry["open_tags"] || []
+        )
+      end
+    end
+
+    def photo_tags_for(index)
+      photo_tag_sets.find { |pts| pts.photo_index == index }
+    end
+
     # Get adapters to try (configured fallback chain)
     def adapters_to_try
       adapters = [adapter.to_sym]
@@ -127,6 +150,11 @@ module AiLens
     end
 
     private
+
+    def parsed_photo_tags
+      data = parsed_llm_results
+      data["photo_tags"] || data[:photo_tags] || []
+    end
 
     def set_defaults
       self.status ||= :pending

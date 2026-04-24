@@ -113,6 +113,8 @@ module AiLens
       parts << schema.to_prompt_description
       parts << ""
       parts << output_format_instruction
+      parts << ""
+      parts << photo_tag_instructions
 
       if context.present?
         parts << ""
@@ -173,6 +175,38 @@ module AiLens
         Additional context provided by the user:
         #{context}
       CONTEXT
+    end
+
+    def photo_tag_instructions
+      config = AiLens.configuration
+      facets = config.photo_tag_facets
+      threshold = config.photo_tag_threshold
+
+      instructions = "For each photo provided, classify it by the following tag facets. " \
+        "Score each facet from 0.0 to 1.0 based on how strongly the photo serves that purpose. " \
+        "Only include facets with scores above #{threshold}.\n\n" \
+        "Tag Facets:\n"
+
+      facets.each do |name, desc|
+        instructions += "- #{name}: #{desc}\n"
+      end
+
+      if config.open_photo_tags
+        instructions += "\nIf you observe qualities in a photo that don't fit any of the defined tag facets " \
+          "above, include them in an \"open_tags\" array with a descriptive facet name " \
+          "(lowercase_snake_case) and a score."
+      end
+
+      instructions += "\n\nInclude a \"photo_tags\" array in your JSON response alongside \"extracted_attributes\". " \
+        "Each entry should have: photo_index (integer), tags (array of {facet, score})"
+
+      if config.open_photo_tags
+        instructions += ", and open_tags (array of {facet, score}) for any novel facets"
+      end
+
+      instructions += "."
+
+      instructions
     end
 
     def feedback_section

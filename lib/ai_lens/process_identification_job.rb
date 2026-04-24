@@ -17,6 +17,7 @@ module AiLens
     def perform(job)
       return if job.status_completed? || job.status_failed?
 
+      job.update_stage!("queued")
       job.start_processing!
 
       begin
@@ -24,6 +25,7 @@ module AiLens
         identifiable = job.identifiable
 
         # Get photos as image URLs (using variants for preprocessing)
+        job.update_stage!("encoding")
         image_urls = prepare_images(identifiable)
 
         if image_urls.empty?
@@ -43,20 +45,26 @@ module AiLens
         prompt = prompt_builder.build
 
         # Get the adapter and make the API call
-        adapter = get_adapter(job.adapter.to_sym)
+        job.update_stage!("analyzing")
+        adapter = get_adapter_for_job(job)
         response = adapter.analyze_with_images(
           prompt: prompt,
           image_urls: image_urls,
           system_prompt: prompt_builder.system_prompt
         )
 
+        job.update_stage!("extracting")
+
         if response.success?
           extracted = response.json_content || {}
 
+          job.update_stage!("validating")
+          job.update_stage!("applying")
           job.complete!(
             extracted_attributes: extracted,
             llm_results: response.raw_response
           )
+          job.update_stage!("completed")
         else
           # Try fallback adapters from the job's configured chain
           try_fallback_adapters(job, identifiable, image_urls, prompt_builder)
@@ -143,6 +151,18 @@ module AiLens
 
     def get_adapter(name)
       AiLoom.adapter(name)
+    end
+
+    def get_adapter_for_job(job)
+      config = AiLens.configuration
+      if config.task && defined?(AiLoom) && AiLoom.respond_to?(:router)
+        begin
+          return AiLoom.router.for(config.task)
+        rescue AiLoom::AdapterError
+          # Fall through to default adapter selection
+        end
+      end
+      get_adapter(job.adapter.to_sym)
     end
 
     def try_fallback_adapters(job, identifiable, image_urls, prompt_builder, primary_error: nil)

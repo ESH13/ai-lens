@@ -66,7 +66,15 @@ module AiLens
         register_callback(:on_failure, callback || block)
       end
 
+      def on_stage_change(method_name = nil, &block)
+        _add_callback(:on_stage_change, method_name || block)
+      end
+
       private
+
+      def _add_callback(type, callback)
+        register_callback(type, callback)
+      end
 
       def register_callback(type, callback)
         callbacks = (_identifiable_callbacks[type] || []).dup
@@ -178,6 +186,16 @@ module AiLens
 
       update!(attributes_to_update) if attributes_to_update.any?
       true
+    end
+
+    # Photo tag sets from the latest identification
+    def photo_tag_sets
+      latest_identification&.photo_tag_sets || []
+    end
+
+    def photo_tags_for(photo_or_index)
+      index = photo_or_index.is_a?(Integer) ? photo_or_index : identification_photos.to_a.index(photo_or_index)
+      latest_identification&.photo_tags_for(index)
     end
 
     # Run identification callbacks of a specific type

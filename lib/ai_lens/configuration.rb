@@ -2,6 +2,15 @@
 
 module AiLens
   class Configuration
+    BUILT_IN_FACETS = {
+      identifier: "Contains text, codes, serial numbers useful for deterministic identification",
+      showcase: "Visually appealing, hero-worthy, display-quality photo",
+      detail: "Close-up of specific feature, texture, flaw, or marking",
+      context: "Shows scale, environment, or provenance",
+      damage: "Documents wear, defects, or condition issues",
+      documentation: "Paperwork, receipts, certificates, provenance docs"
+    }.freeze
+
     # Default LLM adapter to use
     attr_accessor :default_adapter
 
@@ -43,6 +52,13 @@ module AiLens
     # Logger
     attr_accessor :logger
 
+    # Router integration - uses AiLoom.router.for(:task) if set
+    attr_accessor :task
+
+    # Photo tag options
+    attr_accessor :open_photo_tags, :photo_tag_threshold
+    attr_reader :custom_photo_tag_facets
+
     def initialize
       @default_adapter = :openai
       @fallback_adapters = [:anthropic, :grok, :gemini]  # Updated order per plan
@@ -59,10 +75,22 @@ module AiLens
       @image_variant_options = { resize_to_limit: [2048, 2048] }
       @stuck_job_threshold = 1.hour
       @logger = defined?(Rails) ? Rails.logger : Logger.new($stdout)
+      @task = nil
+      @open_photo_tags = false
+      @photo_tag_threshold = 0.3
+      @custom_photo_tag_facets = {}
     end
 
     def schema
       @default_schema || AiLens.default_schema
+    end
+
+    def add_photo_tag_facet(name, description)
+      @custom_photo_tag_facets[name.to_sym] = description
+    end
+
+    def photo_tag_facets
+      BUILT_IN_FACETS.merge(@custom_photo_tag_facets)
     end
   end
 end
