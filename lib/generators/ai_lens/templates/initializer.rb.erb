@@ -1,0 +1,48 @@
+# frozen_string_literal: true
+
+AiLens.configure do |config|
+  # Default LLM adapter (options: :openai, :anthropic, :gemini, :grok)
+  # config.default_adapter = :openai
+
+  # Fallback adapters if primary fails (tried in order)
+  # config.fallback_adapters = [:anthropic, :grok, :gemini]
+
+  # Custom prompt template (path to YAML file with ERB support)
+  # The template can have mode-specific prompts (single_photo_single_item, etc.)
+  # and a system_prompt key. Template variables available:
+  #   - schema, schema_description, schema_fields
+  #   - context, user_feedback, has_feedback, has_context
+  #   - photos_mode, item_mode, single_photo?, multiple_photos?, single_item?, multiple_items?
+  # config.prompt_template = Rails.root.join("config/identification_prompts.yml")
+
+  # Maximum number of photos to process per identification
+  # config.max_photos = 10
+
+  # Whether to automatically apply extracted attributes on success
+  # config.auto_apply = true
+
+  # Background job queue name
+  # config.queue_name = :default
+
+  # Maximum retries for failed jobs
+  # config.max_retries = 3
+
+  # Retry delay in seconds
+  # config.retry_delay = 5
+
+  # ActiveStorage variant options for image preprocessing
+  # config.image_variant_options = { resize_to_limit: [2048, 2048] }
+
+  # Stuck job threshold for recovery (jobs older than this are considered stuck)
+  # config.stuck_job_threshold = 1.hour
+
+  # Custom schema (optional - uses collectibles schema by default)
+  # config.default_schema = AiLens::Schema.define do
+  #   field :name, type: :string, required: true, description: "Item name"
+  #   field :category, type: :string, description: "Item category"
+  #   field :estimated_value, type: :decimal, description: "Estimated value in USD"
+  # end
+end
+
+# Schedule stuck job recovery (optional - add to your scheduler)
+# AiLens::RecoverStuckJobsJob.perform_later

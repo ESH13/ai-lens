@@ -1,0 +1,17 @@
+class CreateAiLensFeedbacks < ActiveRecord::Migration<%= migration_version %>
+  def change
+    create_table :ai_lens_feedbacks do |t|
+      t.references :job, null: false, foreign_key: { to_table: :ai_lens_jobs }
+
+      # Feedback data
+      t.boolean :helpful, null: false
+      t.text :comments  # Encrypted
+      t.json :suggested_corrections, default: {}
+
+      t.timestamps
+    end
+
+    add_index :ai_lens_feedbacks, :helpful
+    add_index :ai_lens_feedbacks, :created_at
+  end
+end

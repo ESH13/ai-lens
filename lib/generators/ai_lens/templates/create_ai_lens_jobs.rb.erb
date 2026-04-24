@@ -1,0 +1,39 @@
+class CreateAiLensJobs < ActiveRecord::Migration<%= migration_version %>
+  def change
+    create_table :ai_lens_jobs do |t|
+      # Polymorphic association to the identifiable model
+      t.references :identifiable, polymorphic: true, null: false, index: true
+
+      # Job configuration
+      t.string :adapter, null: false
+      t.string :photos_mode, null: false, default: "single"
+      t.string :item_mode, null: false, default: "single"
+
+      # Context and feedback (text for encryption support)
+      t.text :context
+      t.text :user_feedback
+
+      # Schema snapshot at time of job creation
+      t.json :schema_snapshot
+
+      # Job status
+      t.string :status, null: false, default: "pending"
+      t.datetime :started_at
+      t.datetime :completed_at
+
+      # Results (text columns for encryption support)
+      t.text :extracted_attributes
+      t.text :llm_results
+
+      # Error handling
+      t.string :error_message
+      t.json :error_details
+
+      t.timestamps
+    end
+
+    add_index :ai_lens_jobs, :status
+    add_index :ai_lens_jobs, :created_at
+    add_index :ai_lens_jobs, [:status, :created_at], name: "index_ai_lens_jobs_on_status_and_created_at"
+  end
+end

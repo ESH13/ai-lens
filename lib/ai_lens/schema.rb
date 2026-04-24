@@ -1,0 +1,114 @@
+# frozen_string_literal: true
+
+module AiLens
+  class Schema
+    attr_reader :fields, :name, :description
+
+    def initialize(name: nil, description: nil)
+      @name = name
+      @description = description
+      @fields = {}
+    end
+
+    # DSL method to add a field
+    def field(name, type:, description: nil, required: false, default: nil, enum: nil)
+      @fields[name.to_sym] = SchemaField.new(
+        name,
+        type: type,
+        description: description,
+        required: required,
+        default: default,
+        enum: enum
+      )
+    end
+
+    # Get a specific field
+    def [](name)
+      @fields[name.to_sym]
+    end
+
+    # Check if schema has a field
+    def has_field?(name)
+      @fields.key?(name.to_sym)
+    end
+
+    # Get field names
+    def field_names
+      @fields.keys
+    end
+
+    # Get required fields
+    def required_fields
+      @fields.select { |_, f| f.required? }
+    end
+
+    # Get optional fields
+    def optional_fields
+      @fields.reject { |_, f| f.required? }
+    end
+
+    # Generate JSON schema
+    def to_json_schema
+      properties = {}
+      required = []
+
+      @fields.each do |name, field|
+        properties[name.to_s] = field.to_json_schema
+        required << name.to_s if field.required?
+      end
+
+      schema = {
+        "type" => "object",
+        "properties" => properties
+      }
+
+      schema["required"] = required if required.any?
+      schema["description"] = description if description
+
+      schema
+    end
+
+    # Generate prompt-friendly field descriptions
+    def to_prompt_description
+      lines = []
+
+      if description
+        lines << description
+        lines << ""
+      end
+
+      lines << "Extract the following fields:"
+      lines << ""
+
+      @fields.each do |_, field|
+        lines << "- #{field.to_prompt_description}"
+      end
+
+      lines.join("\n")
+    end
+
+    # Duplicate schema with modifications
+    def dup
+      new_schema = Schema.new(name: name, description: description)
+      @fields.each do |name, field|
+        new_schema.field(
+          name,
+          type: field.type,
+          description: field.description,
+          required: field.required?,
+          default: field.default_value,
+          enum: field.enum_values
+        )
+      end
+      new_schema
+    end
+
+    # Class method to create schema with block
+    # Uses instance_eval for DSL - this is a standard Ruby pattern for schema definition
+    def self.define(name: nil, description: nil, &block)
+      schema = new(name: name, description: description)
+      schema.instance_eval(&block) if block_given?  # rubocop:disable Security/Eval -- instance_eval is not eval
+      schema
+    end
+  end
+end

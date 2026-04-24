@@ -1,0 +1,63 @@
+
+AiLens has been installed!
+
+Next steps:
+
+1. Run the migration:
+   $ rails db:migrate
+
+2. Configure LLM adapters in config/credentials.yml.enc:
+   openai:
+     api_key: sk-...
+   anthropic:
+     api_key: sk-ant-...
+   google:
+     api_key: ...
+   xai:
+     api_key: ...
+
+3. Add the Identifiable concern to your model:
+
+   class CollectionItem < ApplicationRecord
+     include AiLens::Identifiable
+
+     identifiable_photos :photos
+     identifiable_mapping(
+       name: :title,
+       category: :item_category,
+       description: :notes
+     )
+
+     # Optional: Define a custom schema
+     define_schema do |s|
+       s.field :name, type: :string, required: true
+       s.field :category, type: :string
+       s.field :year, type: :integer
+     end
+
+     # Optional: Lifecycle callbacks
+     before_identify -> (item) { item.user.has_credits? }
+     on_success -> (item, job) { item.broadcast_update }
+   end
+
+4. Trigger identification:
+
+   item = CollectionItem.find(1)
+   job = item.identify!
+
+   # With options:
+   job = item.identify!(
+     adapter: :anthropic,
+     feedback: "This is a rare variant",
+     auto_apply: false
+   )
+
+5. Check status:
+
+   item.identifying?  # => true/false
+   item.identified?   # => true/false
+   job.completed?     # => true/false
+
+For more information, see the README at:
+https://github.com/your-username/ai-lens
+
