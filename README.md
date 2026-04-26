@@ -112,7 +112,14 @@ xai:
 
 ### ActiveRecord Encryption
 
-ai-lens encrypts sensitive columns (extracted_attributes, llm_results, user_feedback, comments). If you have not already configured ActiveRecord encryption, generate the keys:
+Active Record encryption is opt-in. The `encrypts` calls on `AiLens::Job`
+(`extracted_attributes`, `llm_results`, `user_feedback`) and `AiLens::Feedback`
+(`comments`) only activate when `Rails.application.config.active_record.encryption.primary_key`
+is configured. If your host app has not run `bin/rails db:encryption:init`,
+ai-lens stores these columns in plaintext rather than failing to boot.
+**For production with sensitive data, configure encryption.**
+
+To enable encryption, generate the keys:
 
 ```bash
 bin/rails db:encryption:init
@@ -914,19 +921,24 @@ The new identification receives combined feedback from up to five most recent fe
 
 ### Suppressing Auto-Reidentification
 
-If your controller handles re-identification manually, set `reidentify_requested` to suppress the automatic trigger:
+If your controller handles re-identification manually, set `skip_auto_reidentify`
+to suppress the automatic trigger:
 
 ```ruby
 feedback = job.feedbacks.build(
   helpful: false,
   comments: "Wrong item"
 )
-feedback.reidentify_requested = true
+feedback.skip_auto_reidentify = true
 feedback.save!
 
 # Now handle re-identification yourself
 item.identify!(user_feedback: feedback.feedback_text)
 ```
+
+This accessor was renamed from `reidentify_requested` in 0.2.1 because the
+previous name shadowed any real `reidentify_requested` DB column in the host
+app, silently preventing persistence of that column.
 
 ### Combined Feedback Text
 
@@ -1164,11 +1176,13 @@ AiLens::Job.recent                 # ordered by created_at desc
 
 ### Encryption
 
-Three columns are encrypted via `ActiveRecord::Encryption`:
+Four columns are encrypted via `ActiveRecord::Encryption` when the host app
+has configured encryption (see [ActiveRecord Encryption](#activerecord-encryption)):
 
-- `extracted_attributes` -- the structured data extracted by the LLM
-- `llm_results` -- the full raw response from the LLM
-- `user_feedback` -- user-provided feedback text
+- `AiLens::Job#extracted_attributes` -- the structured data extracted by the LLM
+- `AiLens::Job#llm_results` -- the full raw response from the LLM
+- `AiLens::Job#user_feedback` -- user-provided feedback text
+- `AiLens::Feedback#comments` -- user comments on a feedback record
 
 These columns are stored as `text` in the database to support encryption. Use the parsed methods to access them as hashes:
 
