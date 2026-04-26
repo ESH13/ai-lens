@@ -6,8 +6,11 @@ module AiLens
 
     belongs_to :job, class_name: "AiLens::Job"
 
-    # Allow controller to indicate it will handle reidentification manually
-    attr_accessor :reidentify_requested
+    # Allow controller to indicate it will handle reidentification manually.
+    # Note: do NOT shadow the `reidentify_requested` DB column with an
+    # attr_accessor — host apps may rely on persisting that column. The
+    # signal to suppress auto-reidentification is `skip_auto_reidentify`.
+    attr_accessor :skip_auto_reidentify
 
     # Encrypt the comments field (may contain sensitive user data) only if
     # the host app has configured Active Record encryption credentials.
@@ -52,7 +55,7 @@ module AiLens
 
     def should_auto_reidentify?
       # Skip auto-reidentification if host app will handle it manually
-      return false if reidentify_requested
+      return false if skip_auto_reidentify
 
       # Re-identify if user marked as not helpful or provided corrections
       !helpful? || suggested_corrections.present?
