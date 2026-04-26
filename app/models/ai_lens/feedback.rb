@@ -9,8 +9,11 @@ module AiLens
     # Allow controller to indicate it will handle reidentification manually
     attr_accessor :reidentify_requested
 
-    # Encrypt the comments field (may contain sensitive user data)
-    encrypts :comments
+    # Encrypt the comments field (may contain sensitive user data) only if
+    # the host app has configured Active Record encryption credentials.
+    if defined?(Rails) && Rails.application&.config&.active_record&.encryption&.primary_key.present?
+      encrypts :comments
+    end
 
     # Note: suggested_corrections is a native JSON column in the database
     # No serialize needed - Rails 8+ handles JSON columns natively

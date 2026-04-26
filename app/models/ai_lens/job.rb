@@ -36,11 +36,14 @@ module AiLens
     # Callbacks
     before_create :set_defaults
 
-    # Encrypt sensitive data (requires host app to configure encryption keys)
-    # These fields store LLM responses and user data
-    encrypts :llm_results
-    encrypts :extracted_attributes
-    encrypts :user_feedback
+    # Encrypt sensitive data only if the host app has configured Active Record
+    # encryption credentials. This makes encryption opt-in for host apps that
+    # don't use Active Record Encryption.
+    if defined?(Rails) && Rails.application&.config&.active_record&.encryption&.primary_key.present?
+      encrypts :llm_results
+      encrypts :extracted_attributes
+      encrypts :user_feedback
+    end
 
     # Note: schema_snapshot and error_details are native JSON columns
     # No serialize needed - Rails handles JSON natively
