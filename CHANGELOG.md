@@ -4,6 +4,20 @@ All notable changes to ai-lens are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-04-27
+
+### Changed
+- Requires ai-loom >= 0.4.0 (updated default models across all providers).
+
+### Added
+- README "Model Landscape" section with vision-relevant model recommendations,
+  cost-per-identification estimates, and fallback chain guidance. Includes a
+  "Last reviewed" date for staleness tracking.
+- README "Vendoring (Private Gems)" section with step-by-step instructions
+  for vendoring both ai-loom and ai-lens together.
+- `CLAUDE.md` with gem development guide and model maintenance instructions.
+- `AGENTS.md` with model freshness check and vendoring reminders.
+
 ## [0.3.0] - 2026-04-26
 
 0.3.0 is a hardening release. The headline change is that the gem now

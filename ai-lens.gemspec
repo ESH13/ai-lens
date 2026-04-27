@@ -23,7 +23,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "rails", ">= 7.0", "< 9.0"
   # ai-loom 0.3.0+ is required for the tightened error contracts and
   # rate-limiter changes ai-lens 0.3.0 depends on. See UPGRADING.md.
-  spec.add_dependency "ai-loom", ">= 0.3.0", "< 0.4"
+  spec.add_dependency "ai-loom", ">= 0.4.0", "< 0.5"
 
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "sqlite3"

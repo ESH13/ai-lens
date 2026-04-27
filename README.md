@@ -23,21 +23,23 @@ Built on [ai-loom](https://github.com/your-username/ai-loom) for multi-provider 
 3. [Installation](#installation)
 4. [Quick Start](#quick-start)
 5. [Configuration](#configuration)
-6. [Model Setup](#model-setup)
-7. [Schemas](#schemas)
-8. [Triggering Identification](#triggering-identification)
-9. [Photo Tags](#photo-tags)
-10. [Lifecycle Callbacks](#lifecycle-callbacks)
-11. [Progress Stages](#progress-stages)
-12. [Results](#results)
-13. [User Feedback](#user-feedback)
-14. [Fallback Adapters](#fallback-adapters)
-15. [Custom Prompt Templates](#custom-prompt-templates)
-16. [Background Jobs](#background-jobs)
-17. [Job Model](#job-model)
-18. [Error Handling](#error-handling)
-19. [Image Processing](#image-processing)
-20. [Upgrading from photo_identification](#upgrading-from-photo_identification)
+6. [Model Landscape](#model-landscape)
+7. [Model Setup](#model-setup)
+8. [Schemas](#schemas)
+9. [Triggering Identification](#triggering-identification)
+10. [Photo Tags](#photo-tags)
+11. [Lifecycle Callbacks](#lifecycle-callbacks)
+12. [Progress Stages](#progress-stages)
+13. [Results](#results)
+14. [User Feedback](#user-feedback)
+15. [Fallback Adapters](#fallback-adapters)
+16. [Custom Prompt Templates](#custom-prompt-templates)
+17. [Background Jobs](#background-jobs)
+18. [Job Model](#job-model)
+19. [Error Handling](#error-handling)
+20. [Image Processing](#image-processing)
+21. [Vendoring (Private Gems)](#vendoring-private-gems)
+22. [Upgrading from photo_identification](#upgrading-from-photo_identification)
 
 ---
 
@@ -230,6 +232,65 @@ AiLens.configure do |config|
   config.photo_tag_threshold = 0.3
 end
 ```
+
+---
+
+## Model Landscape
+
+> **Last reviewed: 2026-04-27.** LLM models evolve rapidly. If this date is
+> more than 30 days ago, check the ai-loom README for updated model information.
+
+ai-lens uses ai-loom adapters for LLM calls. The models below are especially
+relevant for photo identification (vision + structured extraction):
+
+### Recommended Models for Photo Identification
+
+| Provider | Model | Input$/M | Output$/M | Context | Why |
+|----------|-------|---------|----------|---------|-----|
+| OpenAI | `gpt-4.1-mini` **(default)** | $0.40 | $1.60 | 1M | Best value vision + JSON extraction |
+| OpenAI | `gpt-5.4-mini` | $0.75 | $4.50 | 400K | Stronger vision, higher cost |
+| Anthropic | `claude-sonnet-4-6` | $3.00 | $15.00 | 1M | Excellent detail recognition |
+| Gemini | `gemini-2.5-flash` | $0.30 | $2.50 | 1M | Cheapest with strong vision |
+| Gemini | `gemini-2.5-pro` | $1.25 | $10.00 | 1M | Best reasoning for complex items |
+| Grok | `grok-4-1-fast` | $0.20 | $0.50 | 2M | Budget option with vision |
+
+### Typical Cost per Identification
+
+A single identification sends 1-10 photos (~1-5K tokens each for base64) plus
+the prompt and schema (~500 tokens) and receives a structured response (~500
+tokens). Approximate costs per identification:
+
+| Adapter | 1 Photo | 5 Photos | 10 Photos |
+|---------|---------|----------|-----------|
+| OpenAI (gpt-4.1-mini) | ~$0.005 | ~$0.015 | ~$0.025 |
+| Anthropic (claude-sonnet-4-6) | ~$0.04 | ~$0.10 | ~$0.18 |
+| Gemini (gemini-2.5-flash) | ~$0.004 | ~$0.010 | ~$0.018 |
+| Grok (grok-4-1-fast) | ~$0.002 | ~$0.006 | ~$0.010 |
+
+*Costs are approximate and depend on image size and response length.*
+
+### Fallback Chain Recommendations
+
+For photo identification, configure fallback chains by strength:
+
+```ruby
+AiLens.configure do |config|
+  config.default_adapter = :openai          # gpt-4.1-mini
+  config.fallback_adapters = [:gemini, :anthropic]  # gemini-2.5-flash, then claude-sonnet-4-6
+end
+```
+
+Or use ai-loom's router for task-specific routing:
+
+```ruby
+AiLoom.configure do |config|
+  config.router.route :vision_identification, primary: :openai, fallbacks: [:gemini, :anthropic]
+end
+```
+
+See the [ai-loom README](https://github.com/ESH13/ai-loom) for the full model
+landscape including all providers, use case recommendations, and emerging
+providers.
 
 ---
 
@@ -1515,6 +1576,64 @@ ai-lens handles several photo source types:
 - **String file paths or URLs** -- normalized via `AiLoom::ImageEncoder`
 
 If variant processing fails for any photo, ai-lens falls back to the original image and logs a warning.
+
+---
+
+## Vendoring (Private Gems)
+
+ai-lens is a private gem that depends on ai-loom (also private). To include
+both in a Rails app, vendor them into `vendor/gems/`:
+
+### Initial Setup
+
+```bash
+# From your Rails app root:
+mkdir -p vendor/gems
+cp -R /path/to/ai-loom vendor/gems/ai-loom
+cp -R /path/to/ai-lens vendor/gems/ai-lens
+```
+
+### Gemfile
+
+```ruby
+gem "ai-loom", path: "vendor/gems/ai-loom", require: "ai_loom"
+gem "ai-lens", path: "vendor/gems/ai-lens", require: "ai_lens"
+```
+
+Both `require:` directives are necessary because the gem names use hyphens
+but the Ruby require paths use underscores.
+
+### Updating Vendored Copies
+
+When upgrading to a new version, **always update both gems together** (ai-lens
+depends on a minimum ai-loom version):
+
+```bash
+# Remove old vendored copies completely (don't merge — replace)
+rm -rf vendor/gems/ai-loom vendor/gems/ai-lens
+
+# Copy new versions
+cp -R /path/to/ai-loom vendor/gems/ai-loom
+cp -R /path/to/ai-lens vendor/gems/ai-lens
+
+# Remove development/test artifacts that shouldn't be deployed
+rm -rf vendor/gems/ai-loom/.git vendor/gems/ai-loom/test vendor/gems/ai-loom/Gemfile.lock
+rm -rf vendor/gems/ai-lens/.git vendor/gems/ai-lens/test vendor/gems/ai-lens/Gemfile.lock
+
+# Verify
+bundle install
+```
+
+### Common Mistakes
+
+- **Don't merge old and new versions** — always `rm -rf` then `cp -R`. Leftover
+  files cause subtle bugs.
+- **Don't forget `require: "ai_loom"` and `require: "ai_lens"`** — without these,
+  Bundler won't load the gems because gem names and require paths differ.
+- **Always update both gems together** — ai-lens declares a minimum ai-loom
+  version. Updating one without the other can cause version conflicts.
+- **Don't ship test files or .git** — remove `test/`, `.git/`, and `Gemfile.lock`
+  after copying to keep the deploy lean.
 
 ---
 
