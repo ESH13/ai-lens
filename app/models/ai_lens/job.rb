@@ -66,25 +66,39 @@ module AiLens
       )
     end
 
-    # Mark job as completed with results
+    # Mark job as completed with results.
+    #
     # extracted_attributes: Hash of extracted data
     # llm_results: Raw response from the LLM (encrypted)
+    #
+    # The status update + apply_identification! runs inside a single
+    # transaction so a host-side failure during apply (e.g. an
+    # ActiveRecord::RecordInvalid raised by the host model) rolls the
+    # job back to pending instead of leaving it marked completed with
+    # no host-side mutation. on_success callbacks run OUTSIDE the
+    # transaction so they may safely do non-DB work (enqueueing follow-
+    # up jobs, broadcasting Turbo Streams, etc.) without holding the
+    # write lock open.
     def complete!(extracted_attributes:, llm_results: nil)
       # Convert to JSON string for encrypted storage
       self.extracted_attributes = extracted_attributes.is_a?(Hash) ? extracted_attributes.to_json : extracted_attributes
       self.llm_results = llm_results.is_a?(Hash) ? llm_results.to_json : llm_results
 
-      update!(
-        status: :completed,
-        completed_at: Time.current
-      )
+      ActiveRecord::Base.transaction do
+        update!(
+          status: :completed,
+          completed_at: Time.current
+        )
 
-      # Auto-apply extracted attributes to identifiable (always on success per plan)
-      if identifiable.respond_to?(:apply_identification!)
-        identifiable.apply_identification!(self)
+        # Auto-apply extracted attributes to identifiable (always on success per plan)
+        if identifiable.respond_to?(:apply_identification!)
+          identifiable.apply_identification!(self)
+        end
       end
 
-      # Run success callbacks
+      # Run success callbacks OUTSIDE the transaction so non-DB work
+      # (job enqueue, Turbo Stream broadcasts, etc.) can run without
+      # extending the write lock or rolling back on a non-fatal error.
       identifiable.run_identification_callbacks(:on_success, self) if identifiable.respond_to?(:run_identification_callbacks)
     end
 

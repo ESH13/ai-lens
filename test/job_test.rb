@@ -178,6 +178,85 @@ class JobTest < Minitest::Test
     assert_equal 5, AiLens::ProcessIdentificationJob.send(:configured_retry_delay)
   end
 
+  # Task 8: complete! is atomic. If apply_identification! raises (host
+  # model validation failure, etc.), the status update must roll back so
+  # we don't leave a job marked :completed without applying its
+  # attributes to the host.
+  def test_complete_rolls_back_when_apply_identification_raises
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = "test_items"
+      include AiLens::Identifiable
+      identifiable_photos :photos
+      define_schema do |s|
+        s.field :name, type: :string
+      end
+
+      def photos
+        []
+      end
+
+      # Simulate a host model where apply_identification! raises (e.g.
+      # because the extracted attribute fails a host-side validation).
+      def apply_identification!(_job)
+        raise ActiveRecord::RecordInvalid.new(self), "boom"
+      end
+    end
+    Object.const_set(:TestItemRaisingApply, klass) unless defined?(TestItemRaisingApply)
+
+    item = TestItemRaisingApply.create!(name: "Original")
+    job = AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :pending
+    )
+
+    assert_raises(ActiveRecord::RecordInvalid) do
+      job.complete!(extracted_attributes: { "name" => "After" }, llm_results: {})
+    end
+
+    job.reload
+    assert_equal "pending", job.status, "job should be rolled back to pending after apply raised"
+    assert_nil job.completed_at, "completed_at should not be set when apply raised"
+  end
+
+  # Task 8: on_success callbacks must run OUTSIDE the transaction so a
+  # non-DB error in a callback (or a callback that itself opens a new
+  # transaction) does not roll back the completed job.
+  def test_complete_runs_on_success_outside_transaction
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = "test_items"
+      include AiLens::Identifiable
+      identifiable_photos :photos
+      define_schema do |s|
+        s.field :name, type: :string
+      end
+
+      cattr_accessor :on_success_saw_status
+
+      on_success ->(item, job) {
+        # When this fires, the transaction must already be committed:
+        # a fresh read should see status_completed.
+        self.on_success_saw_status = AiLens::Job.find(job.id).status
+      }
+
+      def photos
+        []
+      end
+    end
+    Object.const_set(:TestItemSuccessCallback, klass) unless defined?(TestItemSuccessCallback)
+
+    item = TestItemSuccessCallback.create!(name: "Original")
+    job = AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :pending
+    )
+
+    job.complete!(extracted_attributes: { "name" => "After" }, llm_results: {})
+
+    assert_equal "completed", klass.on_success_saw_status
+  end
+
   # Task 3: a non-schema key is ignored even if the host has a setter for it.
   def test_apply_identification_only_writes_schema_fields
     item = TestItem.create!(name: "Before", title: "Original Title")
