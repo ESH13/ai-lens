@@ -68,6 +68,56 @@ module AiLens
       schema
     end
 
+    # Validate an extracted_attributes hash against this schema.
+    # Returns an array of violation hashes; an empty array means the
+    # response is valid. Each violation is:
+    #   { field: <name>, kind: :missing | :enum | :type, message: <human-readable> }
+    #
+    # Validation is intentionally lenient about coercion: a string
+    # "42" passes integer validation as long as Integer(value) would
+    # succeed, since LLMs often emit numbers as strings. Apply the
+    # coerced value at write time if you care about strict typing.
+    def validate(extracted)
+      extracted = extracted.is_a?(Hash) ? extracted : {}
+      violations = []
+
+      @fields.each do |name, field|
+        key = name.to_s
+        value = extracted[key]
+        value = extracted[name] if value.nil?
+
+        # Required-field check.
+        if field.required? && (value.nil? || (value.respond_to?(:empty?) && value.empty?))
+          violations << { field: key, kind: :missing, message: "#{key} is required" }
+          next
+        end
+
+        # Skip type/enum checks when no value is present and the field
+        # is optional.
+        next if value.nil?
+
+        # Enum check.
+        if field.has_enum? && !field.enum_values.include?(value)
+          violations << {
+            field: key,
+            kind: :enum,
+            message: "#{key} must be one of #{field.enum_values.inspect} (got #{value.inspect})"
+          }
+        end
+
+        # Type-coercibility check.
+        unless type_compatible?(field.type, value)
+          violations << {
+            field: key,
+            kind: :type,
+            message: "#{key} must be coercible to #{field.type} (got #{value.class.name})"
+          }
+        end
+      end
+
+      violations
+    end
+
     # Generate prompt-friendly field descriptions
     def to_prompt_description
       lines = []
@@ -108,6 +158,34 @@ module AiLens
     end
 
     private
+
+    # Whether a value is compatible with the given schema type. Lenient
+    # by design — LLMs often emit numbers as strings, so "42" is
+    # considered compatible with :integer if Integer(value) parses.
+    def type_compatible?(type, value)
+      case type
+      when :string, :text
+        value.is_a?(String) || value.is_a?(Symbol)
+      when :integer
+        return true if value.is_a?(Integer)
+        return Integer(value, 10).is_a?(Integer) if value.is_a?(String)
+        false
+      when :float, :decimal
+        return true if value.is_a?(Numeric)
+        return Float(value).is_a?(Float) if value.is_a?(String)
+        false
+      when :boolean
+        value == true || value == false
+      when :date, :datetime
+        value.is_a?(String) || value.respond_to?(:strftime)
+      when :array
+        value.is_a?(Array)
+      else
+        true
+      end
+    rescue ArgumentError, TypeError
+      false
+    end
 
     # Best-effort deep-dup for field defaults. Hash and Array dup is
     # shallow; for nested structures we'd need a heavier helper, but

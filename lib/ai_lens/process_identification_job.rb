@@ -77,6 +77,23 @@ module AiLens
           extracted = response.json_content || {}
 
           job.update_stage!("validating")
+          # Task 17: validate the extracted hash against the schema
+          # before applying. If validation fails the job is marked
+          # :failed with the violations recorded in error_details.
+          # Hosts can disable this with config.validate_responses = false.
+          if AiLens.configuration.validate_responses
+            violations = identifiable.identification_schema.validate(extracted)
+            if violations.any?
+              job.fail!(
+                error_message: "schema_validation_failed",
+                error_details: (job.error_details || {}).merge(
+                  "violations" => violations.map { |v| v.transform_keys(&:to_s) }
+                )
+              )
+              return
+            end
+          end
+
           job.update_stage!("applying")
           job.complete!(
             extracted_attributes: extracted,
@@ -270,6 +287,29 @@ module AiLens
 
           if response.success?
             extracted = response.json_content || {}
+
+            # Validate against the schema (Task 17). A fallback
+            # adapter that returns a malformed response is treated the
+            # same as the primary returning malformed: marked failed
+            # with violations.
+            if AiLens.configuration.validate_responses
+              violations = identifiable.identification_schema.validate(extracted)
+              if violations.any?
+                job.update!(
+                  adapter: fallback_name.to_s,
+                  error_details: (job.error_details || {}).merge(
+                    "tried_adapters" => tried_adapters.map(&:to_s)
+                  )
+                )
+                job.fail!(
+                  error_message: "schema_validation_failed",
+                  error_details: (job.error_details || {}).merge(
+                    "violations" => violations.map { |v| v.transform_keys(&:to_s) }
+                  )
+                )
+                return true
+              end
+            end
 
             # Update the adapter used and record tried adapters
             job.update!(

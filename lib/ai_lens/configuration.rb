@@ -52,6 +52,13 @@ module AiLens
     # Router integration - uses AiLoom.router.for(:task) if set
     attr_accessor :task
 
+    # When true (default), every LLM response is validated against the
+    # active schema before apply_identification! runs. Failed
+    # validation marks the job :failed with a list of violations in
+    # error_details. Hosts that want raw LLM output regardless of
+    # shape can set this to false.
+    attr_accessor :validate_responses
+
     # Photo tag options
     attr_accessor :open_photo_tags, :photo_tag_threshold
     attr_reader :custom_photo_tag_facets
@@ -72,6 +79,7 @@ module AiLens
       @stuck_job_threshold = 1.hour
       @logger = defined?(Rails) ? Rails.logger : Logger.new($stdout)
       @task = nil
+      @validate_responses = true
       @open_photo_tags = false
       @photo_tag_threshold = 0.3
       @custom_photo_tag_facets = {}
