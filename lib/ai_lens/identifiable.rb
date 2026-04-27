@@ -121,10 +121,20 @@ module AiLens
           "Pass `item_mode: :single` (default) to identify each photo's primary item."
       end
 
-      # Run before_identify callbacks - can prevent identification by returning false
+      # Run before_identify callbacks. Returning false from any
+      # callback raises AiLens::IdentificationGated so the caller can
+      # tell "callback gated this" apart from other return-nil paths
+      # (e.g. no photos available). See README, "Identification gating".
       unless run_identification_callbacks(:before_identify)
-        return nil
+        raise AiLens::IdentificationGated,
+          "before_identify callback returned false; identification skipped"
       end
+
+      # Bail out early if there are no photos to identify. Returning
+      # nil here is the documented "nothing to do" path; the
+      # IdentificationGated error above is the documented "callback
+      # said no" path.
+      return nil unless identifiable?
 
       # Determine primary adapter and fallback chain
       if adapters.is_a?(Array) && adapters.any?
@@ -237,6 +247,11 @@ module AiLens
       true
     end
 
-    class NotConfiguredError < StandardError; end
+    # Raised when a model that includes AiLens::Identifiable has not
+    # configured `identifiable_photos`. Reparented to AiLens::ConfigurationError
+    # in 0.3.0 so host apps can rescue any gem configuration mistake
+    # under one umbrella; rescue paths that catch StandardError still
+    # work (ConfigurationError < Error < StandardError).
+    class NotConfiguredError < AiLens::ConfigurationError; end
   end
 end

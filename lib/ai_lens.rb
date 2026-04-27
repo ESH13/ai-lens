@@ -3,6 +3,7 @@
 require "ai_loom"
 
 require_relative "ai_lens/version"
+require_relative "ai_lens/errors"
 require_relative "ai_lens/configuration"
 require_relative "ai_lens/schema"
 require_relative "ai_lens/schema_field"
@@ -10,14 +11,6 @@ require_relative "ai_lens/schemas/collectibles"
 require_relative "ai_lens/photo_tag_set"
 
 module AiLens
-  # Base class for all AiLens errors. Host apps can rescue AiLens::Error
-  # to catch any gem-specific failure.
-  class Error < StandardError; end
-
-  # Raised when a feature is requested that is not implemented in the
-  # current version (e.g. item_mode: :multiple in 0.3.0).
-  class NotImplementedError < Error; end
-
   class << self
     def configuration
       @configuration ||= Configuration.new

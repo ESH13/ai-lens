@@ -497,10 +497,21 @@ job.current_stage          # => "analyzing", "extracting", etc.
 
 ### Preventing Identification
 
-A `before_identify` callback that returns `false` prevents the job from being created and `identify!` returns `nil`:
+A `before_identify` callback that returns `false` prevents the job
+from being created. As of 0.3.0, `identify!` raises
+`AiLens::IdentificationGated` in this case so callers can distinguish
+"a callback gated this" from "no photos available" (which still
+returns `nil`):
 
 ```ruby
-job = item.identify!  # => nil (if before_identify returned false)
+begin
+  job = item.identify!
+rescue AiLens::IdentificationGated
+  # before_identify said no — show a "buy more credits" CTA, etc.
+end
+
+# Returns nil only when there are simply no photos to identify:
+item_with_no_photos.identify!  # => nil
 ```
 
 ---
@@ -1219,6 +1230,29 @@ job.adapters_to_try              # [primary_adapter] + fallback_adapters, dedupe
 ---
 
 ## Error Handling
+
+### AiLens Error Hierarchy
+
+All errors raised by ai-lens descend from `AiLens::Error < StandardError`,
+so a host can catch every gem-defined failure with one rescue clause:
+
+```ruby
+begin
+  item.identify!
+rescue AiLens::Error => e
+  # any ai-lens failure
+end
+```
+
+| Error | Raised when |
+|---|---|
+| `AiLens::Error` | Base class — catch this to rescue any ai-lens failure |
+| `AiLens::ConfigurationError` | Host-side configuration is missing or invalid |
+| `AiLens::Identifiable::NotConfiguredError` | `identifiable_photos` not declared on a model (subclass of `ConfigurationError`) |
+| `AiLens::SchemaError` | A `Schema` is malformed |
+| `AiLens::ValidationError` | An LLM response failed schema validation; `#violations` lists the failures |
+| `AiLens::NotImplementedError` | A feature requested is not yet implemented (e.g. `item_mode: :multiple` in 0.3.0) |
+| `AiLens::IdentificationGated` | A `before_identify` callback returned false |
 
 ### Error Types from ai-loom
 

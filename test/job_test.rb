@@ -158,6 +158,54 @@ class JobTest < Minitest::Test
     assert_match(/0\.3\.0|item_mode|single/i, error.message)
   end
 
+  # Task 21: a before_identify that returns false now raises
+  # AiLens::IdentificationGated. Previously identify! returned nil for
+  # both this path and "no photos", which made the two cases
+  # indistinguishable to callers.
+  def test_identify_raises_when_before_identify_returns_false
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = "test_items"
+      include AiLens::Identifiable
+      identifiable_photos :photos
+      define_schema do |s|
+        s.field :name, type: :string
+      end
+      before_identify ->(_item) { false }
+
+      def photos
+        []
+      end
+    end
+    Object.const_set(:GatedTestItem, klass) unless defined?(GatedTestItem)
+
+    item = GatedTestItem.create!(name: "x")
+    assert_raises(AiLens::IdentificationGated) do
+      item.identify!
+    end
+  end
+
+  # Task 21: when there are simply no photos attached, identify! still
+  # returns nil. This is the documented "nothing to do" path.
+  def test_identify_returns_nil_when_no_photos
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = "test_items"
+      include AiLens::Identifiable
+      identifiable_photos :photos
+      define_schema do |s|
+        s.field :name, type: :string
+      end
+
+      def photos
+        []
+      end
+    end
+    Object.const_set(:NoPhotoTestItem, klass) unless defined?(NoPhotoTestItem)
+
+    item = NoPhotoTestItem.create!(name: "x")
+    assert_nil item.identify!
+    assert_equal 0, AiLens::Job.where(identifiable_id: item.id).count
+  end
+
   # Task 6: ProcessIdentificationJob.retry_on previously interpolated
   # AiLens.configuration.max_retries at class-load time, freezing the value
   # before any host-app initializer ran. The runtime configuration must
