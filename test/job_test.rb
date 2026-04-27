@@ -41,4 +41,28 @@ class JobTest < Minitest::Test
     assert_predicate job, :persisted?
     refute job.respond_to?(:auto_apply)
   end
+
+  # Task 4: Job.stuck must respect AiLens.configuration.stuck_job_threshold,
+  # not a hardcoded 1.hour.
+  def test_stuck_scope_respects_configured_threshold
+    AiLens.configuration.stuck_job_threshold = 5.minutes
+
+    old_job = AiLens::Job.create!(
+      identifiable: @item,
+      adapter: "openai",
+      status: :processing
+    )
+    old_job.update_columns(updated_at: 10.minutes.ago, created_at: 10.minutes.ago)
+
+    fresh_job = AiLens::Job.create!(
+      identifiable: @item,
+      adapter: "openai",
+      status: :processing
+    )
+    fresh_job.update_columns(updated_at: 1.minute.ago, created_at: 1.minute.ago)
+
+    stuck_ids = AiLens::Job.stuck.pluck(:id)
+    assert_includes stuck_ids, old_job.id
+    refute_includes stuck_ids, fresh_job.id
+  end
 end

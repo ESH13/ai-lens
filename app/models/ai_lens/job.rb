@@ -31,7 +31,7 @@ module AiLens
     scope :recent, -> { order(created_at: :desc) }
     scope :completed, -> { where(status: :completed) }
     scope :failed, -> { where(status: :failed) }
-    scope :stuck, -> { where(status: [:pending, :processing]).where("created_at < ?", 1.hour.ago) }
+    scope :stuck, -> { where(status: [:pending, :processing]).where("created_at < ?", AiLens.configuration.stuck_job_threshold.ago) }
 
     # Callbacks
     before_create :set_defaults
