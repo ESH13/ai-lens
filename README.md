@@ -455,7 +455,7 @@ job = item.identify!
 
 ```ruby
 job = item.identify!(
-  adapter: :anthropic,           # Override the default adapter
+  adapter: :anthropic,           # Symbol: override the default adapter
   photos_mode: :multiple,        # :single or :multiple
   item_mode: :single,            # :single (only supported value in 0.3.0)
   user_feedback: "This is a 1st edition, not 2nd",  # Corrections from previous attempt
@@ -463,13 +463,15 @@ job = item.identify!(
 )
 ```
 
-You can also pass an explicit adapter chain:
+`adapter:` accepts either a single Symbol or an Array. Pass an Array to set the entire adapter chain in one kwarg — the first entry is primary and the rest are fallbacks, overriding both `default_adapter` and `fallback_adapters` from configuration:
 
 ```ruby
-job = item.identify!(adapters: [:anthropic, :openai, :gemini])
+job = item.identify!(adapter: [:anthropic, :openai, :gemini])
 ```
 
-When `adapters:` is provided, the first entry is the primary and the rest are fallbacks, overriding both `default_adapter` and `fallback_adapters` from configuration.
+The plural `adapters:` Array form is also accepted as a deprecated alias for back-compat with 0.2.x callers. Prefer `adapter:`.
+
+> **Common typo guard:** Passing a non-Array value via `adapters:` (e.g. `adapters: :openai`) raises `ArgumentError` rather than being silently ignored. Pass single adapters via `adapter:`.
 
 ### Mode Combinations
 

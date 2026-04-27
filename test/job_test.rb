@@ -428,4 +428,85 @@ class JobTest < Minitest::Test
     assert_nil item.latest_completed_identification
     assert_equal failed.id, item.latest_identification.id
   end
+
+  # Task 25: identify! accepts `adapter:` as either Symbol or Array.
+  # The Array form sets primary + fallback chain in one kwarg.
+  def test_identify_accepts_adapter_as_symbol
+    item = adapter_test_item
+    with_stubbed_perform_later do
+      job = item.identify!(adapter: :anthropic)
+      assert_equal "anthropic", job.adapter
+    end
+  end
+
+  def test_identify_accepts_adapter_as_array
+    item = adapter_test_item
+    with_stubbed_perform_later do
+      job = item.identify!(adapter: [:grok, :openai, :gemini])
+      assert_equal "grok", job.adapter
+      # The remainder is stashed as fallback chain in error_details.
+      assert_equal ["openai", "gemini"], job.error_details["fallback_adapters"]
+    end
+  end
+
+  # Task 25: a non-Array, non-nil value passed to `adapters:` is the
+  # classic typo (`adapters: :openai`). Previously silently ignored;
+  # now raises ArgumentError so the mistake is caught at the call
+  # site before any work is enqueued.
+  def test_identify_raises_argument_error_when_adapters_is_not_array
+    item = adapter_test_item
+    error = assert_raises(ArgumentError) do
+      item.identify!(adapters: :openai)
+    end
+    assert_match(/adapters:/, error.message)
+    assert_match(/Array/, error.message)
+
+    # No job should have been created.
+    assert_equal 0, AiLens::Job.where(identifiable_id: item.id).count
+  end
+
+  # Task 25: the deprecated `adapters:` Array form still works for
+  # callers migrating from 0.2.x.
+  def test_identify_still_accepts_deprecated_adapters_array
+    item = adapter_test_item
+    with_stubbed_perform_later do
+      job = item.identify!(adapters: [:anthropic, :openai])
+      assert_equal "anthropic", job.adapter
+    end
+  end
+
+  private
+
+  # Shared helper for adapter-arg tests. Returns a TestItem subclass
+  # whose `photos` is non-empty so `identifiable?` returns true and
+  # identify! reaches the job-create path.
+  def adapter_test_item
+    @adapter_test_klass ||= begin
+      klass = Class.new(ActiveRecord::Base) do
+        self.table_name = "test_items"
+        include AiLens::Identifiable
+        identifiable_photos :photos
+        define_schema { |s| s.field :name, type: :string }
+
+        def photos
+          [Object.new]
+        end
+      end
+      Object.const_set(:AdapterArgTestItem, klass) unless defined?(AdapterArgTestItem)
+      AdapterArgTestItem
+    end
+    @adapter_test_klass.create!(name: "x")
+  end
+
+  # ActiveJob serialization needs GlobalID, which the in-memory
+  # SQLite schema doesn't wire. Stub perform_later for tests that
+  # only need to reach the create-job path.
+  def with_stubbed_perform_later
+    AiLens::ProcessIdentificationJob.singleton_class.alias_method(:_orig_perform_later, :perform_later)
+    AiLens::ProcessIdentificationJob.define_singleton_method(:perform_later) { |_j| :enqueued }
+    yield
+  ensure
+    AiLens::ProcessIdentificationJob.singleton_class.alias_method(:perform_later, :_orig_perform_later)
+    AiLens::ProcessIdentificationJob.singleton_class.remove_method(:_orig_perform_later)
+  end
 end

@@ -102,14 +102,29 @@ module AiLens
       identification_photos.any?
     end
 
-    # Start an identification job
+    # Start an identification job.
+    #
     # Options:
-    #   adapter: Override the default adapter (or array of adapters for fallback chain)
-    #   adapters: Array of adapters to try in order (e.g., [:openai, :anthropic, :grok])
-    #   photos_mode: :single or :multiple (how to interpret multiple photos)
-    #   item_mode: :single or :multiple (expect single item or multiple items in photos)
+    #   adapter:       A single adapter Symbol (e.g. `:openai`) **or** an
+    #                  Array of adapters specifying the full chain
+    #                  (e.g. `[:anthropic, :openai, :gemini]`). When an
+    #                  Array is passed, the first entry is primary and
+    #                  the rest are fallbacks, overriding both
+    #                  `default_adapter` and `fallback_adapters` from
+    #                  configuration.
+    #   adapters:      **Deprecated alias** for `adapter:` accepting an
+    #                  Array. Kept for back-compat with 0.2.x callers
+    #                  that used the plural form. Prefer `adapter:`.
+    #   photos_mode:   :single or :multiple (how to interpret multiple photos)
+    #   item_mode:     :single (only supported value in 0.3.0; :multiple
+    #                  raises AiLens::NotImplementedError)
     #   user_feedback: User feedback from previous attempt for re-identification
-    #   context: Additional context for the LLM
+    #   context:       Additional context for the LLM
+    #
+    # Common typo: `adapters: :openai` (Symbol where Array is
+    # expected). Previously this was silently ignored. As of 0.3.0,
+    # passing a non-Array, non-nil value via `adapters:` raises
+    # `ArgumentError` so the typo is caught immediately.
     def identify!(adapter: nil, adapters: nil, photos_mode: :single, item_mode: :single, user_feedback: nil, context: nil)
       # Multi-item mode is not implemented in 0.3.0. Fail fast before
       # creating a job or running before_identify callbacks so callers
@@ -119,6 +134,15 @@ module AiLens
         raise AiLens::NotImplementedError,
           "Multi-item mode is not implemented in 0.3.0. " \
           "Pass `item_mode: :single` (default) to identify each photo's primary item."
+      end
+
+      # Validate `adapters:` kwarg early so a typo like
+      # `adapters: :openai` (Symbol where Array is expected) raises
+      # instead of being silently dropped on the floor.
+      if !adapters.nil? && !adapters.is_a?(Array)
+        raise ArgumentError,
+          "`adapters:` must be an Array of adapter Symbols (e.g. [:openai, :anthropic]). " \
+          "Got #{adapters.inspect}. Pass a single adapter via `adapter:` instead."
       end
 
       # Run before_identify callbacks. Returning false from any
@@ -136,10 +160,19 @@ module AiLens
       # said no" path.
       return nil unless identifiable?
 
-      # Determine primary adapter and fallback chain
-      if adapters.is_a?(Array) && adapters.any?
+      # Determine primary adapter and fallback chain.
+      #
+      # Priority:
+      #   1. `adapter:` as Array → first is primary, rest are fallbacks
+      #   2. `adapters:` Array (deprecated alias) → same shape
+      #   3. `adapter:` as Symbol (or nil) → primary is `adapter` or
+      #      `config.default_adapter`; fallbacks come from
+      #      `config.fallback_adapters`
+      if adapter.is_a?(Array) && adapter.any?
+        primary_adapter = adapter.first
+        fallback_chain = adapter[1..]
+      elsif adapters.is_a?(Array) && adapters.any?
         primary_adapter = adapters.first
-        # Store the full chain in configuration for the job to use
         fallback_chain = adapters[1..]
       else
         primary_adapter = adapter || AiLens.configuration.default_adapter
