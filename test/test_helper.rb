@@ -105,6 +105,10 @@ module AiLoom
     rescue JSON::ParserError
       nil
     end
+
+    def raw_response
+      { "content" => content, "model" => model, "adapter" => adapter }
+    end
   end
 
   class ImageEncoder

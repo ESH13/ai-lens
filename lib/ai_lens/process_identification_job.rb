@@ -33,10 +33,15 @@ module AiLens
       # winner is responsible for advancing it.
       return unless job.start_processing!
 
-      begin
-        # Get the identifiable record
-        identifiable = job.identifiable
+      # Cached prompt builder + image URLs so the fallback path doesn't
+      # re-encode images or rebuild the prompt — see Task 10. We
+      # initialize them outside the begin so the rescue path can pass
+      # them through to try_fallback_adapters.
+      identifiable = job.identifiable
+      image_urls = nil
+      prompt_builder = nil
 
+      begin
         # Get photos as image URLs (using variants for preprocessing)
         job.update_stage!("encoding")
         image_urls = prepare_images(identifiable)
@@ -79,7 +84,8 @@ module AiLens
           )
           job.update_stage!("completed")
         else
-          # Try fallback adapters from the job's configured chain
+          # Try fallback adapters from the job's configured chain. Pass
+          # cached image_urls + prompt_builder so we don't re-encode.
           try_fallback_adapters(job, identifiable, image_urls, prompt_builder)
         end
       rescue AiLoom::RateLimitError => e
@@ -87,22 +93,28 @@ module AiLens
       rescue AiLoom::TimeoutError => e
         retry_or_fail(job, e, wait: self.class.configured_retry_delay)
       rescue AiLoom::AdapterError => e
-        # Try fallback adapters before failing
-        if try_fallback_adapters(job, job.identifiable, nil, nil, primary_error: e)
+        # Try fallback adapters before failing. Reuse whatever we
+        # already computed — image_urls and prompt_builder may be nil
+        # (raised before encoding) and try_fallback_adapters will lazily
+        # build them. If the primary's analyze_with_images itself
+        # raised, both are populated.
+        if try_fallback_adapters(job, identifiable, image_urls, prompt_builder, primary_error: e)
           return
         end
 
         job.fail!(
           error_message: e.message,
-          error_details: { error_class: e.class.name }
+          error_details: (job.error_details || {}).merge(
+            "error_class" => e.class.name
+          )
         )
       rescue => e
         job.fail!(
           error_message: "Unexpected error: #{e.message}",
-          error_details: {
-            error_class: e.class.name,
-            backtrace: e.backtrace&.first(10)
-          }
+          error_details: (job.error_details || {}).merge(
+            "error_class" => e.class.name,
+            "backtrace" => e.backtrace&.first(10)
+          )
         )
       end
     end
@@ -112,13 +124,20 @@ module AiLens
     # Re-enqueue the job for another attempt, or fail it if the runtime-
     # configured max_retries has been exhausted. `executions` (provided by
     # ActiveJob) is 1 on first execution, 2 on first retry, etc.
+    #
+    # Task 12: merge into the existing error_details so any
+    # tried_adapters list recorded by the fallback path survives the
+    # final fail!. Replacing wholesale would lose that diagnostic.
     def retry_or_fail(job, error, wait:)
       if executions < self.class.configured_max_retries
         retry_job(wait: wait, error: error)
       else
         job.fail!(
           error_message: error.message,
-          error_details: { error_class: error.class.name, attempts: executions }
+          error_details: (job.error_details || {}).merge(
+            "error_class" => error.class.name,
+            "attempts" => executions
+          )
         )
       end
     end
@@ -212,31 +231,37 @@ module AiLens
       tried_adapter = job.adapter.to_sym
       tried_adapters = [tried_adapter]
 
+      # Build images / prompt at most once across all fallbacks (Task 10).
+      # If the caller already prepared them in perform, reuse those.
+      image_urls ||= prepare_images(identifiable)
+      prompt_builder ||= PromptBuilder.new(
+        schema: identifiable.identification_schema,
+        context: job.context,
+        user_feedback: job.user_feedback,
+        photos_mode: job.photos_mode,
+        item_mode: job.item_mode
+      )
+      prompt = prompt_builder.build
+
       Array(fallback_adapters).each do |fallback_name|
         fallback_sym = fallback_name.to_sym
         next if tried_adapters.include?(fallback_sym)
+
+        adapter = get_adapter(fallback_sym)
+
+        # Task 13: skip adapters that aren't configured. Without this the
+        # fallback chain wastes attempts on providers the host hasn't
+        # set up, returning misleading "AdapterError" failures.
+        if adapter.respond_to?(:available?) && !adapter.available?
+          logger.info "[AiLens] Skipping unavailable fallback adapter: #{fallback_name}"
+          next
+        end
+
         tried_adapters << fallback_sym
 
         begin
           logger.info "[AiLens] Trying fallback adapter: #{fallback_name}"
 
-          # Re-prepare images if not provided
-          image_urls ||= prepare_images(identifiable)
-
-          # Re-build prompt if not provided
-          if prompt_builder.nil?
-            schema = identifiable.identification_schema
-            prompt_builder = PromptBuilder.new(
-              schema: schema,
-              context: job.context,
-              user_feedback: job.user_feedback,
-              photos_mode: job.photos_mode,
-              item_mode: job.item_mode
-            )
-          end
-          prompt = prompt_builder.build
-
-          adapter = get_adapter(fallback_sym)
           response = adapter.analyze_with_images(
             prompt: prompt,
             image_urls: image_urls,
@@ -264,6 +289,12 @@ module AiLens
           # Continue to next fallback
         end
       end
+
+      # Record what we tried so the outer rescue (or retry_or_fail) can
+      # preserve it in error_details. (Task 12.)
+      job.update!(
+        error_details: (job.error_details || {}).merge("tried_adapters" => tried_adapters.map(&:to_s))
+      )
 
       false
     end

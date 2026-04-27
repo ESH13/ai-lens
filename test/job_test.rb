@@ -178,6 +178,67 @@ class JobTest < Minitest::Test
     assert_equal 5, AiLens::ProcessIdentificationJob.send(:configured_retry_delay)
   end
 
+  # Task 11: parsed_extracted_attributes is memoized so repeated calls
+  # don't re-run JSON.parse on every access.
+  def test_parsed_extracted_attributes_memoizes
+    job = AiLens::Job.create!(
+      identifiable: @item,
+      adapter: "openai",
+      status: :pending,
+      extracted_attributes: { "name" => "Cached" }.to_json
+    )
+
+    parse_calls = 0
+    JSON.singleton_class.alias_method(:_orig_parse, :parse)
+    JSON.define_singleton_method(:parse) do |*a, **kw|
+      parse_calls += 1
+      JSON._orig_parse(*a, **kw)
+    end
+
+    begin
+      first = job.parsed_extracted_attributes
+      second = job.parsed_extracted_attributes
+      assert_equal "Cached", first["name"]
+      assert_equal "Cached", second["name"]
+      assert_equal 1, parse_calls, "JSON.parse should run once across two reads"
+    ensure
+      JSON.singleton_class.alias_method(:parse, :_orig_parse)
+      JSON.singleton_class.remove_method(:_orig_parse)
+    end
+  end
+
+  # Task 11: writing extracted_attributes resets the memo so a later
+  # read sees the new value.
+  def test_parsed_extracted_attributes_memo_resets_on_write
+    job = AiLens::Job.create!(
+      identifiable: @item,
+      adapter: "openai",
+      status: :pending,
+      extracted_attributes: { "name" => "First" }.to_json
+    )
+
+    assert_equal "First", job.parsed_extracted_attributes["name"]
+
+    job.extracted_attributes = { "name" => "Second" }.to_json
+    assert_equal "Second", job.parsed_extracted_attributes["name"]
+  end
+
+  # Task 11: parsed_llm_results memoizes too, with the same write-reset
+  # contract.
+  def test_parsed_llm_results_memoizes_and_resets
+    job = AiLens::Job.create!(
+      identifiable: @item,
+      adapter: "openai",
+      status: :pending,
+      llm_results: { "raw" => "first" }.to_json
+    )
+
+    assert_equal "first", job.parsed_llm_results["raw"]
+
+    job.llm_results = { "raw" => "second" }.to_json
+    assert_equal "second", job.parsed_llm_results["raw"]
+  end
+
   # Task 8: complete! is atomic. If apply_identification! raises (host
   # model validation failure, etc.), the status update must roll back so
   # we don't leave a job marked :completed without applying its

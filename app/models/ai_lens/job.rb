@@ -142,20 +142,62 @@ module AiLens
       user_feedback.present?
     end
 
-    # Parse extracted_attributes from encrypted JSON string
+    # Parse extracted_attributes from encrypted JSON string. Memoized
+    # because (1) JSON.parse is non-trivial for large LLM responses and
+    # (2) views often call this once per partial render. The memo is
+    # invalidated whenever the underlying attribute is written.
     def parsed_extracted_attributes
-      return {} if extracted_attributes.blank?
-      JSON.parse(extracted_attributes)
-    rescue JSON::ParserError
-      {}
+      return @parsed_extracted_attributes if defined?(@parsed_extracted_attributes)
+      @parsed_extracted_attributes = if extracted_attributes.blank?
+        {}
+      else
+        begin
+          JSON.parse(extracted_attributes)
+        rescue JSON::ParserError
+          {}
+        end
+      end
     end
 
-    # Parse llm_results from encrypted JSON string
+    # Parse llm_results from encrypted JSON string. Memoized — see
+    # parsed_extracted_attributes for the rationale. Invalidated on
+    # attribute write.
     def parsed_llm_results
-      return {} if llm_results.blank?
-      JSON.parse(llm_results)
-    rescue JSON::ParserError
-      {}
+      return @parsed_llm_results if defined?(@parsed_llm_results)
+      @parsed_llm_results = if llm_results.blank?
+        {}
+      else
+        begin
+          JSON.parse(llm_results)
+        rescue JSON::ParserError
+          {}
+        end
+      end
+    end
+
+    # Reset the parsed_* memo when the underlying attribute is written
+    # so callers see the new value. Without this, a host that mutates
+    # extracted_attributes via #update! would still see the previously
+    # parsed Hash on subsequent calls.
+    def extracted_attributes=(value)
+      remove_instance_variable(:@parsed_extracted_attributes) if defined?(@parsed_extracted_attributes)
+      @photo_tag_sets = nil
+      super
+    end
+
+    def llm_results=(value)
+      remove_instance_variable(:@parsed_llm_results) if defined?(@parsed_llm_results)
+      @photo_tag_sets = nil
+      super
+    end
+
+    # AR's reload should also drop the memo so a freshly read row is
+    # parsed.
+    def reload(*)
+      remove_instance_variable(:@parsed_extracted_attributes) if defined?(@parsed_extracted_attributes)
+      remove_instance_variable(:@parsed_llm_results) if defined?(@parsed_llm_results)
+      @photo_tag_sets = nil
+      super
     end
 
     # Photo tag sets from LLM results
