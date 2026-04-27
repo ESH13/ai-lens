@@ -137,6 +137,27 @@ class JobTest < Minitest::Test
     assert_equal "untouched", item.photo_tags
   end
 
+  # Task 5: item_mode: :multiple is not implemented in 0.3.0. Calling
+  # identify! with :multiple must raise immediately, before any work is
+  # enqueued, so callers fail fast with a clear message.
+  def test_identify_with_multiple_item_mode_raises_not_implemented
+    assert_raises(AiLens::NotImplementedError) do
+      @item.identify!(item_mode: :multiple)
+    end
+
+    # No job should have been created or enqueued
+    assert_equal 0, AiLens::Job.where(identifiable: @item).count
+  end
+
+  def test_identify_not_implemented_message_is_helpful
+    error = assert_raises(AiLens::NotImplementedError) do
+      @item.identify!(item_mode: :multiple)
+    end
+
+    assert_match(/multi/i, error.message)
+    assert_match(/0\.3\.0|item_mode|single/i, error.message)
+  end
+
   # Task 3: a non-schema key is ignored even if the host has a setter for it.
   def test_apply_identification_only_writes_schema_fields
     item = TestItem.create!(name: "Before", title: "Original Title")

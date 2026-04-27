@@ -111,6 +111,16 @@ module AiLens
     #   user_feedback: User feedback from previous attempt for re-identification
     #   context: Additional context for the LLM
     def identify!(adapter: nil, adapters: nil, photos_mode: :single, item_mode: :single, user_feedback: nil, context: nil)
+      # Multi-item mode is not implemented in 0.3.0. Fail fast before
+      # creating a job or running before_identify callbacks so callers
+      # don't burn credits / enqueue work that will silently behave
+      # like single-item mode.
+      if item_mode.to_sym == :multiple
+        raise AiLens::NotImplementedError,
+          "Multi-item mode is not implemented in 0.3.0. " \
+          "Pass `item_mode: :single` (default) to identify each photo's primary item."
+      end
+
       # Run before_identify callbacks - can prevent identification by returning false
       unless run_identification_callbacks(:before_identify)
         return nil

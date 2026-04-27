@@ -441,7 +441,7 @@ job = item.identify!
 job = item.identify!(
   adapter: :anthropic,           # Override the default adapter
   photos_mode: :multiple,        # :single or :multiple
-  item_mode: :single,            # :single or :multiple
+  item_mode: :single,            # :single (only supported value in 0.3.0)
   user_feedback: "This is a 1st edition, not 2nd",  # Corrections from previous attempt
   context: "Found at an estate sale in Vermont"      # Additional context for the LLM
 )
@@ -460,9 +460,9 @@ When `adapters:` is provided, the first entry is the primary and the rest are fa
 | `photos_mode` | `item_mode` | Behavior |
 |---|---|---|
 | `:single` | `:single` | One photo, one item (default) |
-| `:single` | `:multiple` | One photo containing multiple items -- returns an array |
 | `:multiple` | `:single` | Multiple photos of the same item from different angles |
-| `:multiple` | `:multiple` | Multiple photos that may contain multiple items -- returns an array |
+
+`item_mode: :multiple` is **planned** but not implemented in 0.3.0. Calling `identify!` with `item_mode: :multiple` raises `AiLens::NotImplementedError`. Use `item_mode: :single` (the default) to identify each photo's primary item.
 
 ### Status Checking
 
