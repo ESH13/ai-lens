@@ -182,9 +182,6 @@ AiLens.configure do |config|
   # Maximum number of photos sent per identification
   config.max_photos = 10
 
-  # Automatically apply extracted attributes to the model on success
-  config.auto_apply = true
-
   # ActiveJob queue name
   config.queue_name = :default
 
@@ -839,7 +836,7 @@ job.parsed_llm_results
 
 ### Auto-Apply
 
-When `auto_apply` is `true` (the default), extracted attributes are automatically applied to the model upon successful completion. The mapping defined by `identifiable_mapping` controls how field names are translated:
+Extracted attributes are automatically applied to the model upon successful job completion. The mapping defined by `identifiable_mapping` controls how field names are translated:
 
 ```ruby
 # Extracted: { "name" => "...", "category" => "..." }
@@ -847,11 +844,11 @@ When `auto_apply` is `true` (the default), extracted attributes are automaticall
 # Result:    item.title = "...", item.item_type = "..."
 ```
 
-Fields without a mapping entry are applied directly if the model responds to a setter of the same name.
+Fields without a mapping entry are applied directly if the model responds to a setter of the same name. Only keys defined in the schema are applied — unknown keys returned by the LLM (e.g. `photo_tags`) are ignored.
 
 ### Manual Apply
 
-If `auto_apply` is `false`, or to re-apply from a different job:
+To re-apply attributes from any completed job:
 
 ```ruby
 item.apply_identification!(job)  # => true on success, false if job not completed or no data

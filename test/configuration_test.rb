@@ -9,7 +9,6 @@ class ConfigurationTest < Minitest::Test
     assert_equal :openai, config.default_adapter
     assert_equal [:anthropic, :grok, :gemini], config.fallback_adapters
     assert_equal 10, config.max_photos
-    assert config.auto_apply
   end
 
   def test_configure_block
@@ -17,20 +16,17 @@ class ConfigurationTest < Minitest::Test
       config.default_adapter = :anthropic
       config.fallback_adapters = [:openai, :gemini]
       config.max_photos = 10
-      config.auto_apply = false
     end
 
     assert_equal :anthropic, AiLens.configuration.default_adapter
     assert_equal [:openai, :gemini], AiLens.configuration.fallback_adapters
     assert_equal 10, AiLens.configuration.max_photos
-    refute AiLens.configuration.auto_apply
 
     # Reset for other tests
     AiLens.configure do |config|
       config.default_adapter = :openai
       config.fallback_adapters = [:anthropic, :grok, :gemini]
       config.max_photos = 10
-      config.auto_apply = true
     end
   end
 

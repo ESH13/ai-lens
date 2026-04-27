@@ -161,7 +161,6 @@ module AiLens
 
     def set_defaults
       self.status ||= :pending
-      self.auto_apply = AiLens.configuration.auto_apply if auto_apply.nil?
     end
   end
 end

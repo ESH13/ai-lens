@@ -48,8 +48,7 @@ Next steps:
    # With options:
    job = item.identify!(
      adapter: :anthropic,
-     feedback: "This is a rare variant",
-     auto_apply: false
+     user_feedback: "This is a rare variant"
    )
 
 5. Check status:

@@ -26,9 +26,6 @@ module AiLens
     # Maximum number of photos to process per identification
     attr_accessor :max_photos
 
-    # Whether to auto-apply extracted attributes on success
-    attr_accessor :auto_apply
-
     # Job queue name
     attr_accessor :queue_name
 
@@ -65,7 +62,6 @@ module AiLens
       @default_schema = nil # Will use AiLens.default_schema
       @prompt_template = nil # Host app provides custom template
       @max_photos = 10  # Send all photos per plan decision
-      @auto_apply = true
       @queue_name = :default
       @max_retries = 3
       @retry_delay = 5

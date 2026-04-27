@@ -425,7 +425,7 @@ job.parsed_extracted_attributes
 # => { "name" => "1952 Topps Mickey Mantle", "category" => "trading_card", ... }
 ```
 
-When `auto_apply` is true (the default), extracted attributes are automatically written to the model using the mapping defined in `identifiable_mapping`.
+Extracted attributes are automatically written to the model on job completion, using the mapping defined in `identifiable_mapping`. Only keys declared in the schema are applied to the host model.
 
 ### 4.4 Handle Callbacks
 
