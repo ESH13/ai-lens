@@ -418,7 +418,7 @@ job = item.identify!(
 item.identifying?          # => true (pending or processing)
 item.identified?           # => true (completed successfully)
 
-job = item.latest_identification
+job = item.latest_completed_identification
 job.status                 # => "completed"
 
 job.parsed_extracted_attributes

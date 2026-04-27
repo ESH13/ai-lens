@@ -383,4 +383,49 @@ class JobTest < Minitest::Test
     assert_equal "After", item.name
     assert_equal "Original Title", item.title
   end
+
+  # Task 23: `latest_completed_identification` is the canonical accessor for
+  # the most recent successfully completed job. `latest_identification`
+  # is now name-true: returns the most recent job regardless of status.
+  def test_latest_completed_identification_returns_only_completed_jobs
+    item = TestItem.create!(name: "Original")
+
+    AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :failed
+    )
+    completed = AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :completed,
+      completed_at: 1.minute.ago
+    )
+    pending = AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :pending
+    )
+
+    # Latest completed: only the :completed job qualifies.
+    assert_equal completed.id, item.latest_completed_identification.id
+    # Latest overall (name-true): the most recently created job, which
+    # is `pending`.
+    assert_equal pending.id, item.latest_identification.id
+  end
+
+  # Task 23: when there are no completed jobs, latest_completed_identification
+  # returns nil — but latest_identification can still surface a pending or
+  # failed job.
+  def test_latest_completed_identification_nil_when_no_completed_jobs
+    item = TestItem.create!(name: "Original")
+    failed = AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :failed
+    )
+
+    assert_nil item.latest_completed_identification
+    assert_equal failed.id, item.latest_identification.id
+  end
 end

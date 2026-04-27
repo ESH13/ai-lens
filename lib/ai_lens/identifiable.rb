@@ -179,9 +179,28 @@ module AiLens
       ai_lens_jobs.completed.exists?
     end
 
-    # Get the most recent successful job
-    def latest_identification
+    # Get the most recent successfully completed job.
+    #
+    # 0.3.0 rename: previously named `latest_identification`. The old
+    # name implied "latest overall" but actually filtered to
+    # `:completed`. The canonical accessor is now
+    # `latest_completed_identification`; `latest_identification`
+    # remains as a back-compat method that returns the most recent
+    # job regardless of status (i.e. its name-true semantics). See
+    # CHANGELOG and UPGRADING for details.
+    def latest_completed_identification
       ai_lens_jobs.completed.order(completed_at: :desc).first
+    end
+
+    # Most recent identification job for this record, regardless of
+    # status (`:pending`, `:processing`, `:completed`, `:failed`).
+    # Useful when a host wants to surface "we're working on it" or
+    # "we tried and failed" in the UI.
+    #
+    # If you specifically want the latest job that has succeeded, use
+    # `latest_completed_identification`.
+    def latest_identification
+      ai_lens_jobs.order(created_at: :desc).first
     end
 
     # Apply extracted attributes from a job to this model.
@@ -216,14 +235,15 @@ module AiLens
       true
     end
 
-    # Photo tag sets from the latest identification
+    # Photo tag sets from the latest successfully completed identification.
+    # Pending/processing/failed jobs do not contribute photo tag sets.
     def photo_tag_sets
-      latest_identification&.photo_tag_sets || []
+      latest_completed_identification&.photo_tag_sets || []
     end
 
     def photo_tags_for(photo_or_index)
       index = photo_or_index.is_a?(Integer) ? photo_or_index : identification_photos.to_a.index(photo_or_index)
-      latest_identification&.photo_tags_for(index)
+      latest_completed_identification&.photo_tags_for(index)
     end
 
     # Run identification callbacks of a specific type

@@ -153,7 +153,7 @@ job.status                 # => "processing"
 
 # After completion
 item.identified?           # => true
-job = item.latest_identification
+job = item.latest_completed_identification
 job.parsed_extracted_attributes
 # => { "name" => "1952 Topps Mickey Mantle", "category" => "trading_card", ... }
 ```
@@ -839,7 +839,7 @@ on_stage_change ->(item, job, stage) {
 After a successful identification, access the extracted data:
 
 ```ruby
-job = item.latest_identification
+job = item.latest_completed_identification
 
 # Parsed hash from encrypted JSON
 job.parsed_extracted_attributes
@@ -884,8 +884,24 @@ item.apply_identification!(job)  # => true on success, false if job not complete
 ### Latest Identification
 
 ```ruby
-job = item.latest_identification  # Most recent completed job, ordered by completed_at
+# Most recent successfully completed job (ordered by completed_at desc).
+# Use this when you want extracted attributes / photo tag data.
+job = item.latest_completed_identification
+
+# Most recent identification job regardless of status — pending,
+# processing, completed, or failed (ordered by created_at desc). Use
+# this when you want to surface "we're working on it" / "we tried and
+# failed" UI states.
+job = item.latest_identification
 ```
+
+**0.3.0 rename:** `latest_identification` previously returned only
+completed jobs despite its name. The canonical accessor for "the
+latest completed identification" is now
+`latest_completed_identification`. `latest_identification` still
+exists with name-true semantics — most recent job of any status. If
+you used `latest_identification` to read extracted attributes, switch
+to `latest_completed_identification` to preserve the old behavior.
 
 ### Job Attributes
 
@@ -1020,7 +1036,7 @@ job = item.identify!(adapters: [:anthropic, :openai, :gemini])
 After a job completes (especially via fallback), inspect which adapters were attempted:
 
 ```ruby
-job = item.latest_identification
+job = item.latest_completed_identification
 job.adapter  # => "grok" (the adapter that succeeded)
 
 # All adapters that were tried
