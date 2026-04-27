@@ -4,6 +4,12 @@ All notable changes to ai-lens are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-04-27
+
+### Fixed
+- `CLAUDE.md` and `AGENTS.md` were not included in `spec.files`.
+- Gemspec dependency comment was stale (referenced 0.3.0).
+
 ## [0.4.0] - 2026-04-27
 
 ### Changed
