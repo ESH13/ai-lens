@@ -21,7 +21,9 @@ Gem::Specification.new do |spec|
   spec.files = Dir["{app,config,db,lib}/**/*", "LICENSE.txt", "Rakefile", "README.md", "CHANGELOG.md"]
 
   spec.add_dependency "rails", ">= 7.0", "< 9.0"
-  spec.add_dependency "ai-loom", ">= 0.2.0"
+  # ai-loom 0.3.0+ is required for the tightened error contracts and
+  # rate-limiter changes ai-lens 0.3.0 depends on. See UPGRADING.md.
+  spec.add_dependency "ai-loom", ">= 0.3.0", "< 0.4"
 
   spec.add_development_dependency "minitest"
   spec.add_development_dependency "sqlite3"

@@ -62,12 +62,13 @@ ai-lens is designed for collectibles, antiques, and valuable items, but works fo
 - **Multi-provider LLM support** via ai-loom (OpenAI, Anthropic, Gemini, Grok)
 - **Automatic fallback chain** -- if the primary adapter fails, ai-lens tries the next provider in the chain
 - **Configurable schemas** -- define exactly which fields to extract, with types, enums, and descriptions
-- **Default collectibles schema** with 17 fields (name, category, manufacturer, series, variant, brand, year, condition, rarity, description, value estimates, confidence score, counterfeit risk, featured photo index, identifying features, notes)
+- **Minimal default schema** (`name`, `description`, `category`, `notes`) suitable for any "tell me about this photo" use case
+- **Bundled `AiLens::Schemas::Collectibles`** with 17 collectibles-specific fields (manufacturer, series, year, condition, value estimates, etc.) — opt-in, not on by default
 - **Per-model custom schemas** -- override the default schema for specific models
 - **Photo tagging** -- each photo is classified by six built-in facets plus custom facets and open tagging
 - **Lifecycle callbacks** -- before_identify (gate), after_identify, on_success, on_failure, on_stage_change
 - **Progress stages** -- seven stages from queued to completed, with callbacks for real-time UI updates
-- **Auto-apply** -- extracted attributes are automatically mapped and applied to your model
+- **Automatic attribute application** -- extracted attributes are mapped and applied to your model on successful job completion (only schema-declared fields, never arbitrary LLM keys)
 - **Attribute mapping** -- map extracted field names to your model's column names
 - **User feedback loop** -- collect feedback, trigger automatic re-identification with corrections
 - **Encrypted storage** -- extracted_attributes, llm_results, user_feedback, and comments are encrypted via ActiveRecord encryption
@@ -896,7 +897,7 @@ job.parsed_extracted_attributes
 job.parsed_llm_results
 ```
 
-### Auto-Apply
+### Automatic Application
 
 Extracted attributes are automatically applied to the model upon successful job completion. The mapping defined by `identifiable_mapping` controls how field names are translated:
 

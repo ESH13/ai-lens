@@ -10,7 +10,7 @@ PATH
   remote: .
   specs:
     ai-lens (0.3.0)
-      ai-loom (>= 0.2.0)
+      ai-loom (>= 0.3.0, < 0.4)
       rails (>= 7.0, < 9.0)
 
 GEM
