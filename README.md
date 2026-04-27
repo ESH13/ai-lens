@@ -1215,6 +1215,21 @@ job.parsed_extracted_attributes  # => { "name" => "...", ... }
 job.parsed_llm_results           # => { "content" => "...", ... }
 ```
 
+#### JSON columns are not encrypted
+
+`AiLens::Feedback#suggested_corrections` is declared as `t.json` in the
+install migration. Active Record encryption does **not** support
+JSON-typed columns — the encryption layer returns its ciphertext as a
+string, which Postgres rejects when writing back to a `json` column. So
+this column remains plaintext even when the host has configured Active
+Record encryption.
+
+If your application needs `suggested_corrections` encrypted, change
+the column type to `t.text` and serialize the hash to JSON yourself
+before assigning. The data-migration risk for an existing database
+made it inappropriate to flip this in 0.3.0; this note is here so the
+contract is unambiguous.
+
 ### Parsed Methods
 
 ```ruby
