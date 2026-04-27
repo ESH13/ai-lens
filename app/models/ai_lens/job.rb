@@ -154,9 +154,17 @@ module AiLens
 
     private
 
+    # photo_tags is emitted by the LLM inside its JSON content (which lands in
+    # extracted_attributes), not in the provider envelope (llm_results). Read
+    # it from extracted_attributes; fall back to llm_results for legacy rows
+    # written by the previous wiring.
     def parsed_photo_tags
-      data = parsed_llm_results
-      data["photo_tags"] || data[:photo_tags] || []
+      attrs = parsed_extracted_attributes
+      tags = attrs["photo_tags"] || attrs[:photo_tags]
+      return tags if tags.is_a?(Array)
+
+      legacy = parsed_llm_results
+      legacy["photo_tags"] || legacy[:photo_tags] || []
     end
 
     def set_defaults

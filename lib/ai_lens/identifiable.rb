@@ -164,7 +164,12 @@ module AiLens
       ai_lens_jobs.completed.order(completed_at: :desc).first
     end
 
-    # Apply extracted attributes from a job to this model
+    # Apply extracted attributes from a job to this model.
+    #
+    # Only keys declared in the identification schema are considered. Non-schema
+    # keys returned by the LLM (e.g. "photo_tags", "items") are ignored, even
+    # if the host model happens to have a writer of the same name. This prevents
+    # LLM output from silently overwriting unrelated host-model state.
     def apply_identification!(job)
       return false unless job.status_completed?
 
@@ -173,9 +178,12 @@ module AiLens
 
       return false if extracted.blank?
 
+      schema_keys = identification_schema.field_names.map(&:to_s).to_set
       attributes_to_update = {}
 
       extracted.each do |key, value|
+        next unless schema_keys.include?(key.to_s)
+
         # Use mapping if defined, otherwise try direct attribute name
         target_attribute = mapping[key.to_s] || mapping[key.to_sym] || key
 
