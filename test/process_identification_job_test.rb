@@ -112,6 +112,55 @@ class ProcessIdentificationJobTest < Minitest::Test
     assert_equal "StandardError", job.error_details["error_class"]
   end
 
+  # Code-review fix: when a fallback adapter succeeds, the job's
+  # current_stage must follow the same progression as a primary
+  # success — extracting -> (validating) -> applying -> completed.
+  # Previously the fallback path completed the job without emitting
+  # any stage updates, so on_stage_change subscribers saw the stage
+  # frozen at "analyzing" even though the work finished.
+  def test_fallback_success_updates_current_stage_to_completed
+    job = AiLens::Job.create!(
+      identifiable: @item,
+      adapter: "openai",
+      status: :pending
+    )
+    AiLens.configuration.fallback_adapters = [:anthropic]
+    AiLens.configuration.validate_responses = false
+
+    instance = AiLens::ProcessIdentificationJob.new
+    instance.define_singleton_method(:prepare_images) { |_| ["data:image/jpeg;base64,fake"] }
+
+    # Primary raises an AdapterError (the rescue-driven fallback
+    # path). Fallback returns a healthy response.
+    AiLoom.singleton_class.alias_method(:_orig_adapter, :adapter)
+    AiLoom.define_singleton_method(:adapter) do |name|
+      adapter = AiLoom._orig_adapter(name)
+      case name.to_sym
+      when :openai
+        adapter.define_singleton_method(:analyze_with_images) do |**_|
+          raise AiLoom::AdapterError, "primary boom"
+        end
+      when :anthropic
+        adapter.define_singleton_method(:available?) { true }
+      end
+      adapter
+    end
+
+    begin
+      instance.perform(job)
+    ensure
+      AiLoom.singleton_class.alias_method(:adapter, :_orig_adapter)
+      AiLoom.singleton_class.remove_method(:_orig_adapter)
+    end
+
+    job.reload
+    assert_equal "completed", job.status
+    assert_equal "completed", job.current_stage,
+      "fallback success must end with current_stage = 'completed' just like primary success"
+    assert_equal "anthropic", job.adapter,
+      "fallback adapter that succeeded should be recorded as the job's adapter"
+  end
+
   # Task 13: unavailable fallback adapters are skipped. The chain
   # advances to the next adapter rather than counting the unavailable
   # one as a failed attempt.

@@ -1440,4 +1440,4 @@ The generator will not overwrite existing migrations, so you only need the initi
 
 ## License
 
-ai-lens is released under the [MIT License](MIT-LICENSE).
+ai-lens is released under the [MIT License](LICENSE.txt).

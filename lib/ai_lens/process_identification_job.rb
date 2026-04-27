@@ -76,12 +76,15 @@ module AiLens
         if response.success?
           extracted = response.json_content || {}
 
-          job.update_stage!("validating")
           # Task 17: validate the extracted hash against the schema
           # before applying. If validation fails the job is marked
           # :failed with the violations recorded in error_details.
-          # Hosts can disable this with config.validate_responses = false.
+          # Hosts can disable this with config.validate_responses = false,
+          # in which case we skip emitting the "validating" stage entirely
+          # so on_stage_change subscribers don't see a stage that did no
+          # work.
           if AiLens.configuration.validate_responses
+            job.update_stage!("validating")
             violations = identifiable.identification_schema.validate(extracted)
             if violations.any?
               job.fail!(
@@ -292,11 +295,20 @@ module AiLens
           if response.success?
             extracted = response.json_content || {}
 
+            # Mirror the primary success path's stage progression so
+            # on_stage_change subscribers see the same sequence
+            # regardless of which adapter ultimately succeeded:
+            # extracting -> (validating) -> applying -> completed.
+            job.update_stage!("extracting")
+
             # Validate against the schema (Task 17). A fallback
             # adapter that returns a malformed response is treated the
             # same as the primary returning malformed: marked failed
-            # with violations.
+            # with violations. As in the primary path, we only emit
+            # the "validating" stage when validation is actually
+            # configured to run.
             if AiLens.configuration.validate_responses
+              job.update_stage!("validating")
               violations = identifiable.identification_schema.validate(extracted)
               if violations.any?
                 job.update!(
@@ -321,10 +333,12 @@ module AiLens
               error_details: (job.error_details || {}).merge("tried_adapters" => tried_adapters.map(&:to_s))
             )
 
+            job.update_stage!("applying")
             job.complete!(
               extracted_attributes: extracted,
               llm_results: response.raw_response
             )
+            job.update_stage!("completed")
 
             return true
           end
