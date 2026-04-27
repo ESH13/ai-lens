@@ -309,30 +309,46 @@ A schema defines the fields the LLM should extract from photos. Each field has a
 
 ### Default Schema
 
-ai-lens ships with a built-in collectibles schema containing these fields:
+ai-lens ships with a minimal generic default schema. This is a
+**breaking change in 0.3.0** — earlier versions defaulted to a
+17-field collectibles schema. Hosts that relied on the collectibles
+default should opt in via `AiLens::Schemas::Collectibles` (see below).
 
 | Field | Type | Description |
 |---|---|---|
 | `name` | string | The name or title of the item |
-| `category` | string | Primary category (enum, see below) |
-| `subcategory` | string | Subcategory within the main category |
-| `manufacturer` | string | Manufacturer or brand name |
-| `series` | string | Series, collection, or product line |
-| `variant` | string | Specific variant, edition, or colorway |
-| `brand` | string | Manufacturer, brand, or issuing authority |
-| `year` | integer | Year of manufacture or release |
-| `condition` | string | Condition assessment (enum, see below) |
-| `rarity` | string | Rarity level (e.g., Common, Uncommon, Rare, Ultra Rare) |
 | `description` | text | Detailed description of the item |
-| `estimated_value_low` | decimal | Low estimate of market value in USD |
-| `estimated_value_high` | decimal | High estimate of market value in USD |
-| `confidence_score` | float | Confidence in the identification (0.0 to 1.0) |
-| `counterfeit_risk` | float | Counterfeit risk score (0.0 to 1.0) |
-| `featured_photo_index` | integer | Index of the best photo for display |
-| `identifying_features` | array | List of key identifying features |
+| `category` | string | Freeform category (no enum) |
 | `notes` | text | Additional notes or observations |
 
-### Category Enum Values
+### Collectibles Schema (opt-in)
+
+For richer collectibles identification, use the bundled
+`AiLens::Schemas::Collectibles` schema, which adds 13 more fields
+including `manufacturer`, `series`, `variant`, `year`, `condition`
+(with enum), `rarity`, `estimated_value_low/high`, `confidence_score`,
+`counterfeit_risk`, `featured_photo_index`, `identifying_features`,
+and a category enum covering trading cards, sneakers, watches, etc.
+
+**Per-model:**
+
+```ruby
+class Item < ApplicationRecord
+  include AiLens::Identifiable
+  identifiable_photos :photos
+  define_schema(&AiLens::Schemas::Collectibles.method(:apply))
+end
+```
+
+**Globally:**
+
+```ruby
+AiLens.configure do |config|
+  config.default_schema = AiLens::Schemas::Collectibles.build
+end
+```
+
+#### Collectibles Category Enum
 
 ```
 trading_card, pokemon_card, sports_card, mtg_card, yugioh_card, coin, stamp,
@@ -341,7 +357,7 @@ video_game, sneakers, watch, jewelry, handbag, art_print, figurine, diecast_car,
 plush, ornament, pottery, antique, memorabilia, autograph, book, instrument, other
 ```
 
-### Condition Enum Values
+#### Collectibles Condition Enum
 
 ```
 mint, near_mint, excellent, good, fair, poor

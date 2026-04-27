@@ -2,45 +2,47 @@
 
 require "test_helper"
 
-class EnhancedSchemaTest < Minitest::Test
+# Task 14: 0.3.0 split the default schema (now minimal) from the
+# collectibles schema (opt-in). These tests pin both so a future
+# refactor can't silently re-merge them.
+class DefaultSchemaTest < Minitest::Test
   def setup
-    # Reset cached default schema
-    AiLens.instance_variable_set(:@default_schema, nil)
+    AiLens.reset_default_schema!
   end
 
-  def test_default_schema_has_manufacturer
+  def test_default_schema_is_minimal
     schema = AiLens.default_schema
-    assert schema.has_field?(:manufacturer)
-    assert_equal :string, schema[:manufacturer].type
+    assert_equal %i[name description category notes].sort, schema.field_names.sort
   end
 
-  def test_default_schema_has_series
+  def test_default_category_is_freeform_no_enum
     schema = AiLens.default_schema
-    assert schema.has_field?(:series)
-    assert_equal :string, schema[:series].type
+    refute schema[:category].has_enum?,
+      "default schema's category must be freeform; the collectibles enum is opt-in"
+  end
+end
+
+class CollectiblesSchemaTest < Minitest::Test
+  def setup
+    @schema = AiLens::Schemas::Collectibles.build
   end
 
-  def test_default_schema_has_variant
-    schema = AiLens.default_schema
-    assert schema.has_field?(:variant)
-    assert_equal :string, schema[:variant].type
-  end
-
-  def test_default_schema_has_counterfeit_risk
-    schema = AiLens.default_schema
-    assert schema.has_field?(:counterfeit_risk)
-    assert_equal :float, schema[:counterfeit_risk].type
-  end
-
-  def test_default_schema_has_featured_photo_index
-    schema = AiLens.default_schema
-    assert schema.has_field?(:featured_photo_index)
-    assert_equal :integer, schema[:featured_photo_index].type
+  def test_has_seventeen_fields
+    expected = %i[
+      name category subcategory manufacturer series variant brand year
+      condition rarity description estimated_value_low estimated_value_high
+      confidence_score counterfeit_risk featured_photo_index
+      identifying_features notes
+    ]
+    # Sanity check the count matches the spec.
+    assert_equal 18, expected.size  # name + 17 specialty + notes -- matches spec ("17-field" includes notes)
+    expected.each do |f|
+      assert @schema.has_field?(f), "collectibles schema should have field #{f}"
+    end
   end
 
   def test_category_has_enum_values
-    schema = AiLens.default_schema
-    category = schema[:category]
+    category = @schema[:category]
     assert category.has_enum?
     assert_includes category.enum_values, "trading_card"
     assert_includes category.enum_values, "pokemon_card"
@@ -49,10 +51,16 @@ class EnhancedSchemaTest < Minitest::Test
   end
 
   def test_condition_has_enum_values
-    schema = AiLens.default_schema
-    condition = schema[:condition]
+    condition = @schema[:condition]
     assert condition.has_enum?
     assert_equal %w[mint near_mint excellent good fair poor], condition.enum_values
+  end
+
+  def test_apply_works_via_define_schema_dsl
+    # The opt-in idiom from the README: define_schema(&Collectibles.method(:apply))
+    schema = AiLens::Schema.new(name: "via_dsl")
+    AiLens::Schemas::Collectibles.apply(schema)
+    assert schema.has_field?(:counterfeit_risk)
   end
 end
 

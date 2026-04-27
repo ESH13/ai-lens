@@ -87,7 +87,11 @@ module AiLens
       lines.join("\n")
     end
 
-    # Duplicate schema with modifications
+    # Duplicate schema with modifications. Deep-copies enum_values so
+    # mutating the dup's enum array (e.g. `dup[:category].enum_values << :foo`)
+    # cannot reach the original schema. Without this every consumer of
+    # `enum_values` shared the same array instance — a footgun that
+    # silently leaked changes across test runs and host configs.
     def dup
       new_schema = Schema.new(name: name, description: description)
       @fields.each do |name, field|
@@ -96,12 +100,34 @@ module AiLens
           type: field.type,
           description: field.description,
           required: field.required?,
-          default: field.default_value,
-          enum: field.enum_values
+          default: deep_dup_value(field.default_value),
+          enum: field.enum_values&.dup
         )
       end
       new_schema
     end
+
+    private
+
+    # Best-effort deep-dup for field defaults. Hash and Array dup is
+    # shallow; for nested structures we'd need a heavier helper, but
+    # field defaults are typically scalars, hashes, or arrays of
+    # scalars.
+    def deep_dup_value(value)
+      case value
+      when Hash then value.dup.transform_values { |v| deep_dup_value(v) }
+      when Array then value.map { |v| deep_dup_value(v) }
+      when nil, true, false, Numeric, Symbol then value
+      else
+        begin
+          value.dup
+        rescue TypeError
+          value
+        end
+      end
+    end
+
+    public
 
     # Class method to create schema with block
     # Uses instance_eval for DSL - this is a standard Ruby pattern for schema definition

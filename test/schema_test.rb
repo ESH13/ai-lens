@@ -77,4 +77,29 @@ class SchemaTest < Minitest::Test
 
     assert_equal [:name, :value], schema.field_names
   end
+
+  # Task 15: Schema#dup must deep-copy enum_values. Mutating the dup's
+  # enum array would otherwise reach into the original — a footgun
+  # that silently leaked changes across host-app config and test runs.
+  def test_dup_deep_copies_enum_values
+    original = AiLens::Schema.define(name: "Original") do
+      field :category, type: :string, enum: %w[a b c]
+    end
+
+    copy = original.dup
+    copy[:category].enum_values << "d"
+
+    assert_equal %w[a b c], original[:category].enum_values
+    assert_equal %w[a b c d], copy[:category].enum_values
+  end
+
+  # Task 15 corollary: nil enum stays nil after dup (no NoMethodError).
+  def test_dup_handles_nil_enum
+    original = AiLens::Schema.define(name: "Original") do
+      field :name, type: :string
+    end
+
+    copy = original.dup
+    assert_nil copy[:name].enum_values
+  end
 end
