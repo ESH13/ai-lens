@@ -665,6 +665,29 @@ novel_facets = item.photo_tag_sets
 
 Register callbacks at the class level. Each callback receives the model instance and, where applicable, the job and error.
 
+> **These are not Rails-style callbacks.** ai-lens callbacks
+> (`before_identify`, `after_identify`, `on_success`, `on_failure`,
+> `on_stage_change`) are simple proc / method-symbol hooks. They do
+> **not** support `:if`, `:unless`, `:only`, `:except`, `:prepend`, or
+> any other Rails callback options. They do not participate in
+> `ActiveSupport::Callbacks` chains, cannot be reordered, and cannot
+> be skipped via `skip_callback`. They are registered on the class
+> with `class_attribute` storage and run in registration order.
+>
+> If you need conditional execution, gate inside the proc:
+>
+> ```ruby
+> before_identify ->(item) {
+>   return true unless item.user.subscribed?
+>   item.user.credits.positive?
+> }
+> ```
+>
+> If you need a "skip this callback" mechanism, set state on the
+> instance and check it inside the callback. Real Rails callback
+> semantics (with `:if`/`:unless`) may arrive in a future major
+> version; for now treat these as plain proc hooks.
+
 ### `before_identify`
 
 Runs before the job is created. Return `false` to prevent identification.

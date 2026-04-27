@@ -44,7 +44,14 @@ module AiLens
         self._identifiable_schema = schema
       end
 
-      # Register lifecycle callbacks
+      # Register lifecycle callbacks.
+      #
+      # NOTE: these are simple proc / method-symbol hooks, NOT
+      # Rails-style ActiveSupport callbacks. They do not support
+      # `:if`, `:unless`, callback ordering options, or
+      # `skip_callback`. Gate conditionally inside the proc itself.
+      # See README, "Lifecycle Callbacks", for the full contract.
+      #
       # Example:
       #   before_identify -> (item) { item.credits.any? }
       #   after_identify -> (item, job) { broadcast_update(item) }
