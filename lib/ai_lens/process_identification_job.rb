@@ -4,15 +4,26 @@ module AiLens
   class ProcessIdentificationJob < ActiveJob::Base
     queue_as { AiLens.configuration.queue_name }
 
-    retry_on AiLoom::RateLimitError,
-      wait: :polynomially_longer,
-      attempts: AiLens.configuration.max_retries
-
-    retry_on AiLoom::TimeoutError,
-      wait: AiLens.configuration.retry_delay,
-      attempts: AiLens.configuration.max_retries
+    # ActiveJob's `retry_on` evaluates `attempts:` once at class-load time,
+    # so `attempts: AiLens.configuration.max_retries` would freeze the
+    # value before any host-app initializer ran, and procs aren't
+    # accepted there (the runtime check is `executions < attempts`, a
+    # strict integer comparison). Procs ARE accepted by `wait:`, but we
+    # need a single source of truth for both knobs, so retry/discard
+    # decisions are made in the per-error rescue inside `perform` and
+    # this class declares no `retry_on` directives.
 
     discard_on AiLoom::AuthenticationError
+
+    # Runtime accessors for retry tuning. Read at perform / retry time so
+    # changes made in a host-app initializer take effect.
+    def self.configured_max_retries
+      AiLens.configuration.max_retries
+    end
+
+    def self.configured_retry_delay
+      AiLens.configuration.retry_delay
+    end
 
     def perform(job)
       return if job.status_completed? || job.status_failed?
@@ -69,6 +80,10 @@ module AiLens
           # Try fallback adapters from the job's configured chain
           try_fallback_adapters(job, identifiable, image_urls, prompt_builder)
         end
+      rescue AiLoom::RateLimitError => e
+        retry_or_fail(job, e, wait: polynomial_backoff_seconds)
+      rescue AiLoom::TimeoutError => e
+        retry_or_fail(job, e, wait: self.class.configured_retry_delay)
       rescue AiLoom::AdapterError => e
         # Try fallback adapters before failing
         if try_fallback_adapters(job, job.identifiable, nil, nil, primary_error: e)
@@ -91,6 +106,27 @@ module AiLens
     end
 
     private
+
+    # Re-enqueue the job for another attempt, or fail it if the runtime-
+    # configured max_retries has been exhausted. `executions` (provided by
+    # ActiveJob) is 1 on first execution, 2 on first retry, etc.
+    def retry_or_fail(job, error, wait:)
+      if executions < self.class.configured_max_retries
+        retry_job(wait: wait, error: error)
+      else
+        job.fail!(
+          error_message: error.message,
+          error_details: { error_class: error.class.name, attempts: executions }
+        )
+      end
+    end
+
+    # Same polynomial backoff curve ActiveJob's `:polynomially_longer` uses,
+    # so the visible behavior matches the previous declaration: ~3s, ~18s,
+    # ~83s, ...
+    def polynomial_backoff_seconds
+      (executions**4) + 2
+    end
 
     def prepare_images(identifiable)
       photos = identifiable.identification_photos

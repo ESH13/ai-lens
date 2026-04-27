@@ -158,6 +158,26 @@ class JobTest < Minitest::Test
     assert_match(/0\.3\.0|item_mode|single/i, error.message)
   end
 
+  # Task 6: ProcessIdentificationJob.retry_on previously interpolated
+  # AiLens.configuration.max_retries at class-load time, freezing the value
+  # before any host-app initializer ran. The runtime configuration must
+  # be honored. Same for retry_delay (passed to wait:).
+  def test_max_retries_reads_runtime_configuration
+    AiLens.configuration.max_retries = 7
+    assert_equal 7, AiLens::ProcessIdentificationJob.send(:configured_max_retries)
+
+    AiLens.configuration.max_retries = 2
+    assert_equal 2, AiLens::ProcessIdentificationJob.send(:configured_max_retries)
+  end
+
+  def test_retry_delay_reads_runtime_configuration
+    AiLens.configuration.retry_delay = 30
+    assert_equal 30, AiLens::ProcessIdentificationJob.send(:configured_retry_delay)
+
+    AiLens.configuration.retry_delay = 5
+    assert_equal 5, AiLens::ProcessIdentificationJob.send(:configured_retry_delay)
+  end
+
   # Task 3: a non-schema key is ignored even if the host has a setter for it.
   def test_apply_identification_only_writes_schema_fields
     item = TestItem.create!(name: "Before", title: "Original Title")
