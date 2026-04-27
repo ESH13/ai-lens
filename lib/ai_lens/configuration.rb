@@ -17,7 +17,21 @@ module AiLens
     # Fallback adapters if primary fails
     attr_accessor :fallback_adapters
 
-    # Default schema to use (can be overridden per model)
+    # Default schema to use (can be overridden per model).
+    #
+    # This is the **writable** accessor host apps assign to:
+    #
+    #   AiLens.configure do |config|
+    #     config.default_schema = AiLens::Schemas::Collectibles.build
+    #   end
+    #
+    # When `nil` (the default), the gem-level minimal schema at
+    # `AiLens.default_schema` is used.
+    #
+    # See also `#schema` — the **read-only** resolver that returns this
+    # value or falls back to `AiLens.default_schema`. Internal code
+    # (`identification_schema`) calls `#schema`; host code assigns to
+    # `default_schema`.
     attr_accessor :default_schema
 
     # Custom prompt template (path to YAML/ERB file, or nil for defaults)
@@ -85,6 +99,12 @@ module AiLens
       @custom_photo_tag_facets = {}
     end
 
+    # Read-only resolver for the active default schema.
+    #
+    # Returns the host-configured `default_schema` if set, otherwise
+    # the gem-level minimal default at `AiLens.default_schema`.
+    # `Identifiable#identification_schema` calls this — host apps
+    # assign to `default_schema=` and read from this method.
     def schema
       @default_schema || AiLens.default_schema
     end
