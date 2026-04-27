@@ -384,6 +384,48 @@ class JobTest < Minitest::Test
     assert_equal "Original Title", item.title
   end
 
+  # Regression: complete! applies extracted attributes through the
+  # `identifiable_mapping` so a schema field can be renamed onto a
+  # different host model attribute (e.g., schema `name` → host `title`).
+  # Without this, mappings declared on the host model would be ignored
+  # and apply_identification! would silently no-op for renamed fields.
+  def test_complete_applies_attributes_through_identifiable_mapping
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = "test_items"
+      include AiLens::Identifiable
+      identifiable_photos :photos
+      define_schema do |s|
+        s.field :name, type: :string
+      end
+
+      # Map LLM's `name` onto host model's `title` column.
+      identifiable_mapping(name: :title)
+
+      def photos
+        []
+      end
+    end
+    Object.const_set(:MappedTestItem, klass) unless defined?(MappedTestItem)
+
+    item = MappedTestItem.create!(name: "Original Name", title: "Original Title")
+    job = AiLens::Job.create!(
+      identifiable: item,
+      adapter: "openai",
+      status: :pending
+    )
+
+    job.complete!(
+      extracted_attributes: { "name" => "Identified Item" },
+      llm_results: {}
+    )
+
+    item.reload
+    assert_equal "Identified Item", item.title,
+      "schema field `name` should be mapped onto host attribute `title`"
+    assert_equal "Original Name", item.name,
+      "the unmapped attribute `name` on the host should be untouched"
+  end
+
   # Task 23: `latest_completed_identification` is the canonical accessor for
   # the most recent successfully completed job. `latest_identification`
   # is now name-true: returns the most recent job regardless of status.
