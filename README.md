@@ -1188,27 +1188,120 @@ end
 
 Finds jobs stuck in `pending` or `processing` state for longer than `stuck_job_threshold` and retries them with the next adapter in the fallback chain. If all adapters have been tried, the job is marked as failed.
 
-**Scheduling:**
+`RecoverStuckJobsJob` records a `recovery_attempts` counter in the
+job's `error_details` and gives up after `MAX_RECOVERY_ATTEMPTS`
+(default 3), so a chronically re-stalling job no longer cycles in
+the queue forever.
 
-Add to your scheduler (e.g., `solid_queue.yml`, `sidekiq-cron`, or `whenever`):
+**Recommended cadence:** every 15 minutes is a reasonable default
+for most apps. Faster than that wastes work for jobs that just
+needed another minute; slower than that lets transient-stuck jobs
+wait too long before recovery.
 
-```ruby
-# solid_queue.yml
-recurring:
+#### Scheduling with Solid Queue
+
+Solid Queue supports recurring jobs natively. Add to
+`config/recurring.yml`:
+
+```yaml
+production:
   recover_stuck_ai_lens_jobs:
     class: AiLens::RecoverStuckJobsJob
     schedule: every 15 minutes
 ```
 
+Then ensure the recurring scheduler is enabled in your Solid Queue
+configuration (`config/queue.yml`):
+
+```yaml
+production:
+  dispatchers:
+    - polling_interval: 1
+      batch_size: 500
+  workers:
+    - queues: "*"
+      threads: 5
+      processes: 1
+  scheduler:
+    recurring_tasks: true
+```
+
+#### Scheduling with sidekiq-cron
+
+Add to `config/sidekiq.yml`:
+
+```yaml
+:schedule:
+  recover_stuck_ai_lens_jobs:
+    cron: "*/15 * * * *"
+    class: "AiLens::RecoverStuckJobsJob"
+    queue: default
+```
+
+`sidekiq-cron` will pick this up automatically on boot. For a
+programmatic registration, use `Sidekiq::Cron::Job.create` in an
+initializer.
+
+#### Scheduling with whenever
+
+Add to `config/schedule.rb`:
+
 ```ruby
-# Or trigger manually
+every 15.minutes do
+  runner "AiLens::RecoverStuckJobsJob.perform_later"
+end
+```
+
+Then run `whenever --update-crontab` during deploy.
+
+#### Fallback: cache-locked initializer
+
+For apps without a recurring scheduler, you can drive the recovery
+job from a long-lived process (e.g. a Puma worker) using
+`Rails.cache` as a distributed lock:
+
+```ruby
+# config/initializers/ai_lens_recovery.rb
+Rails.application.config.after_initialize do
+  Thread.new do
+    loop do
+      sleep 15.minutes.to_i
+
+      # Acquire a 14-minute lock so only one worker triggers per
+      # interval. Rails.cache.write with unless_exist returns false
+      # if a key is already set.
+      acquired = Rails.cache.write(
+        "ai_lens:recover_stuck_jobs:lock",
+        Process.pid,
+        expires_in: 14.minutes,
+        unless_exist: true
+      )
+
+      AiLens::RecoverStuckJobsJob.perform_later if acquired
+    rescue => e
+      Rails.logger.error("[ai-lens recovery] #{e.class}: #{e.message}")
+    end
+  end
+end
+```
+
+This pattern requires a cache backend that supports atomic
+`unless_exist: true` (Redis, Memcached, Solid Cache). It's a
+fallback — prefer Solid Queue / sidekiq-cron / whenever where you
+have them. It will not run inside `bin/rails console` or one-off
+tasks; it only runs in long-lived web/worker processes.
+
+#### Manual trigger
+
+You can always run the job by hand:
+
+```ruby
 AiLens::RecoverStuckJobsJob.perform_later
 ```
 
-```ruby
-# Or from a cron-style scheduler
-AiLens::RecoverStuckJobsJob.perform_later  # recommended: run every 15 minutes
-```
+Useful for `bin/rails runner` smoke tests or for kicking off
+recovery after a known incident without waiting for the next
+scheduled tick.
 
 ---
 
