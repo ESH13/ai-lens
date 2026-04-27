@@ -29,7 +29,9 @@ module AiLens
       return if job.status_completed? || job.status_failed?
 
       job.update_stage!("queued")
-      job.start_processing!
+      # If another worker won the race to claim this job, bail out. The
+      # winner is responsible for advancing it.
+      return unless job.start_processing!
 
       begin
         # Get the identifiable record

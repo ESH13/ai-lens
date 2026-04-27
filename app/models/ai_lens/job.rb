@@ -58,12 +58,26 @@ module AiLens
       identifiable&.run_identification_callbacks(:on_stage_change, self, stage) if identifiable&.respond_to?(:run_identification_callbacks)
     end
 
-    # Mark job as processing
+    # Mark job as processing.
+    #
+    # Uses a conditional UPDATE (status = 'pending') so two workers
+    # racing for the same record cannot both transition it. The caller
+    # is expected to bail out of perform when this returns false, which
+    # is what ProcessIdentificationJob does.
+    #
+    # Returns true if this caller won the race, false otherwise.
     def start_processing!
-      update!(
-        status: :processing,
-        started_at: Time.current
-      )
+      affected = self.class
+        .where(id: id, status: "pending")
+        .update_all(status: "processing", started_at: Time.current, updated_at: Time.current)
+
+      if affected == 1
+        # Refresh in-memory state so the caller observes the new values.
+        reload
+        true
+      else
+        false
+      end
     end
 
     # Mark job as completed with results.
