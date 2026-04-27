@@ -89,6 +89,38 @@ module AiLens
       @default_schema || AiLens.default_schema
     end
 
+    # The effective ActiveStorage variant options for image
+    # preprocessing. Layers the standalone knobs (max_image_dimension,
+    # image_quality, image_format) on top of any explicit
+    # image_variant_options the host set, with the explicit options
+    # taking precedence so existing configurations keep working.
+    #
+    # The standalone knobs were documented but previously unused. They
+    # are now wired in: a host that only sets
+    #   config.max_image_dimension = 1024
+    #   config.image_quality = 80
+    #   config.image_format = :jpeg
+    # gets a variant of:
+    #   { resize_to_limit: [1024, 1024], saver: { quality: 80 }, format: :jpeg }
+    def effective_image_variant_options
+      base = {}
+
+      if max_image_dimension
+        base[:resize_to_limit] = [max_image_dimension, max_image_dimension]
+      end
+
+      if image_quality
+        base[:saver] = { quality: image_quality }
+      end
+
+      if image_format
+        base[:format] = image_format
+      end
+
+      explicit = image_variant_options || {}
+      base.merge(explicit.to_h)
+    end
+
     def add_photo_tag_facet(name, description)
       @custom_photo_tag_facets[name.to_sym] = description
     end

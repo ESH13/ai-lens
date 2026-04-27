@@ -1322,13 +1322,28 @@ When a `format` key is present in variant options, ai-lens uses the correct MIME
 
 ### Dimension Limits
 
+The standalone preprocessing knobs are wired into the variant options
+ai-lens passes to ActiveStorage. Configure them individually:
+
 ```ruby
 AiLens.configure do |config|
-  config.max_image_dimension = 2048  # pixels
-  config.image_quality = 85          # JPEG quality (1-100)
-  config.image_format = :jpeg        # output format
+  config.max_image_dimension = 2048  # resizes to fit within N x N
+  config.image_quality = 85          # JPEG quality (1-100), passed to libvips/ImageMagick saver
+  config.image_format = :jpeg        # output format coercion (HEIC -> JPEG, etc.)
 end
 ```
+
+These three values produce a variant equivalent to:
+
+```ruby
+{ resize_to_limit: [max_image_dimension, max_image_dimension],
+  saver: { quality: image_quality },
+  format: image_format }
+```
+
+Anything you set explicitly via `config.image_variant_options` takes
+precedence over these defaults — so you can override individual keys
+without losing the others.
 
 ### Supported Photo Types
 

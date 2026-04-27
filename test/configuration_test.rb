@@ -30,6 +30,32 @@ class ConfigurationTest < Minitest::Test
     end
   end
 
+  # Task 18: standalone image_quality / image_format /
+  # max_image_dimension are wired into the variant options used for
+  # ActiveStorage preprocessing.
+  def test_effective_image_variant_options_derives_from_standalone_knobs
+    config = AiLens::Configuration.new
+    config.max_image_dimension = 1024
+    config.image_quality = 70
+    config.image_format = :jpeg
+    config.image_variant_options = nil # unset explicit override
+
+    options = config.effective_image_variant_options
+    assert_equal [1024, 1024], options[:resize_to_limit]
+    assert_equal({ quality: 70 }, options[:saver])
+    assert_equal :jpeg, options[:format]
+  end
+
+  def test_explicit_image_variant_options_takes_precedence
+    config = AiLens::Configuration.new
+    config.max_image_dimension = 1024
+    config.image_variant_options = { resize_to_limit: [4096, 4096] }
+
+    options = config.effective_image_variant_options
+    assert_equal [4096, 4096], options[:resize_to_limit],
+      "explicit image_variant_options must override the derived defaults"
+  end
+
   def test_default_schema_configuration
     AiLens.configure do |config|
       config.default_schema = AiLens::Schema.define(name: "Custom") do

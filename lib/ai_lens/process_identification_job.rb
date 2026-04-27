@@ -178,7 +178,11 @@ module AiLens
     def encode_photo(photo)
       # Handle ActiveStorage attachments with variant preprocessing
       if photo.respond_to?(:variant) && photo.respond_to?(:download)
-        variant_options = AiLens.configuration.image_variant_options
+        # Task 18: variant options now derive from the standalone
+        # image_quality / image_format / max_image_dimension knobs as
+        # well as the explicit image_variant_options hash. This means
+        # a host can configure preprocessing with either form.
+        variant_options = AiLens.configuration.effective_image_variant_options
 
         # Use variant for preprocessing (resize, format conversion)
         if variant_options.present?
