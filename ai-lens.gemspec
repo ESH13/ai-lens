@@ -18,11 +18,11 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
 
-  spec.files = Dir["{app,config,db,lib}/**/*", "LICENSE.txt", "Rakefile", "README.md", "CHANGELOG.md"]
+  spec.files = Dir["{app,config,db,lib}/**/*", "LICENSE.txt", "Rakefile", "README.md", "CHANGELOG.md", "CLAUDE.md", "AGENTS.md"]
 
   spec.add_dependency "rails", ">= 7.0", "< 9.0"
-  # ai-loom 0.3.0+ is required for the tightened error contracts and
-  # rate-limiter changes ai-lens 0.3.0 depends on. See UPGRADING.md.
+  # ai-loom 0.4.0+ is required for updated default models (the 0.3.0
+  # defaults are deprecated/sunset). See CHANGELOG.md.
   spec.add_dependency "ai-loom", ">= 0.4.0", "< 0.5"
 
   spec.add_development_dependency "minitest"
