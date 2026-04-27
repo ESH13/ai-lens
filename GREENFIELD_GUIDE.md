@@ -1,6 +1,15 @@
 # ai-loom & ai-lens Greenfield Integration Guide
 
-A practical reference for integrating ai-loom and/or ai-lens into a Rails codebase from scratch. Written for developers and AI sessions.
+A practical first-time-setup walkthrough for integrating ai-loom
+and/or ai-lens into a Rails codebase from scratch. Written for
+developers and AI sessions.
+
+> **Scope of this doc.** This is the opinionated greenfield
+> walkthrough — focused, short, prescriptive. For the full ai-lens
+> API reference (every config, every callback, every error class,
+> every Job column, etc.) see [README.md](README.md). The README is
+> the source of truth for the ai-lens surface; this guide gets you
+> from "no AI" to "first call working" with minimal noise.
 
 ---
 
@@ -373,7 +382,12 @@ end
 
 ## 4. Quick Start: ai-lens
 
-### 4.1 Model Setup
+This section gets you from "gem installed" to "first identification
+job running." For the full API surface (every config, callback,
+schema option, error class, Job column, scheduling pattern, etc.),
+see [README.md](README.md).
+
+### 4.1 Minimum-Viable Model
 
 ```ruby
 # app/models/item.rb
@@ -381,79 +395,72 @@ class Item < ApplicationRecord
   include AiLens::Identifiable
 
   has_many_attached :photos
-
   identifiable_photos :photos
-
-  identifiable_mapping(
-    name: :title,
-    category: :item_type,
-    description: :notes
-  )
 end
 ```
 
-The default schema extracts 17 fields suited for collectibles (name, category, year, condition, estimated values, etc.). See section 5.8 for custom schemas.
+The 0.3.0 default schema is minimal: `name`, `description`,
+`category` (freeform), `notes`. For a richer collectibles-oriented
+schema, opt in to `AiLens::Schemas::Collectibles` — see the README
+"Schemas" section.
 
 ### 4.2 Trigger Identification
 
 ```ruby
-item = Item.find(1)
-job = item.identify!
-```
+job = Item.find(1).identify!
 
-With options:
-
-```ruby
-job = item.identify!(
-  adapter: :anthropic,
-  photos_mode: :multiple,
-  item_mode: :single,
+# With options
+job = Item.find(1).identify!(
+  adapter: :anthropic,                          # Symbol or Array
+  photos_mode: :multiple,                       # :single or :multiple
   context: "Found at an estate sale in Vermont"
 )
 ```
 
+`item_mode: :multiple` raises `AiLens::NotImplementedError` in
+0.3.0 — only single-item mode is supported.
+
 ### 4.3 Check Results
 
 ```ruby
-item.identifying?          # => true (pending or processing)
-item.identified?           # => true (completed successfully)
+item.identifying?  # => true while pending or processing
+item.identified?   # => true after a successful run
 
 job = item.latest_completed_identification
-job.status                 # => "completed"
-
 job.parsed_extracted_attributes
 # => { "name" => "1952 Topps Mickey Mantle", "category" => "trading_card", ... }
 ```
 
-Extracted attributes are automatically written to the model on job completion, using the mapping defined in `identifiable_mapping`. Only keys declared in the schema are applied to the host model.
+Schema fields land on the host model automatically (mapped via
+`identifiable_mapping` if configured). Non-schema keys returned by
+the LLM (`photo_tags`, `items`, etc.) are filtered out.
 
-### 4.4 Handle Callbacks
+### 4.4 Wire Up Lifecycle Callbacks
 
 ```ruby
 class Item < ApplicationRecord
   include AiLens::Identifiable
-
   has_many_attached :photos
   identifiable_photos :photos
 
   before_identify ->(item) { item.user.credits.positive? }
-
-  on_success ->(item, job) {
-    item.user.decrement!(:credits)
-  }
-
-  on_failure ->(item, job, error) {
-    ErrorTracker.notify(error, item_id: item.id)
-  }
-
-  on_stage_change ->(item, job, stage) {
-    Turbo::StreamsChannel.broadcast_replace_to(
-      item, target: "identification_status",
-      partial: "items/identification_stage", locals: { stage: stage }
-    )
-  }
+  on_success      ->(item, job) { item.user.decrement!(:credits) }
+  on_failure      ->(item, job, error) { ErrorTracker.notify(error, item_id: item.id) }
+  on_stage_change ->(item, job, stage) { item.broadcast_stage(stage) }
 end
 ```
+
+These are simple proc hooks, not Rails-style ActiveSupport
+callbacks — `:if`/`:unless` aren't supported. See README, "Lifecycle
+Callbacks", for the full contract.
+
+### 4.5 Where to Go Next
+
+For everything else — schemas, photo tags, custom prompt templates,
+fallback chains, error hierarchy, the Job model, RecoverStuckJobsJob
+scheduling, encryption, image preprocessing — go to
+[README.md](README.md). It's organized as a reference, with a table
+of contents at the top.
 
 ---
 
@@ -938,73 +945,30 @@ Conversation.failed      # scope
 
 ### 5.8 Photo Tags (ai-lens)
 
-**When:** You want photos classified by how they should be used (showcase, identifier, detail, damage, etc.).
+**When:** You want photos classified by how they should be used
+(showcase, identifier, detail, damage, etc.).
 
-**Built-in facets:**
+ai-lens scores every photo against six built-in facets (`identifier`,
+`showcase`, `detail`, `context`, `damage`, `documentation`) plus any
+custom facets you register. Open tagging lets the LLM invent
+facets beyond the registered set.
 
-| Facet | Description |
-|-------|-------------|
-| `identifier` | Contains text, codes, serial numbers for deterministic identification |
-| `showcase` | Visually appealing, hero-worthy, display-quality photo |
-| `detail` | Close-up of specific feature, texture, flaw, or marking |
-| `context` | Shows scale, environment, or provenance |
-| `damage` | Documents wear, defects, or condition issues |
-| `documentation` | Paperwork, receipts, certificates, provenance docs |
+The full reference — all facets, all configuration knobs,
+`PhotoTagSet` API, hero-image / identifier / damage selection
+patterns, open-tagging behavior — lives in **[README.md, "Photo
+Tags"](README.md#photo-tags)**.
 
-**Configuration:**
+Quick taste:
 
 ```ruby
-# config/initializers/ai_lens.rb
 AiLens.configure do |config|
-  # Add custom facets
-  config.add_photo_tag_facet :packaging, "Shows original packaging, box, or case"
-  config.add_photo_tag_facet :comparison, "Side-by-side comparison with reference item"
-
-  # Allow the LLM to invent additional facets
+  config.add_photo_tag_facet :packaging, "Original packaging, box, or case"
   config.open_photo_tags = true
-
-  # Minimum score threshold (0.0 to 1.0)
   config.photo_tag_threshold = 0.3
 end
-```
 
-**Access tags after identification:**
-
-```ruby
-item.photo_tag_sets
-# => [#<PhotoTagSet photo_index: 0, ...>, #<PhotoTagSet photo_index: 1, ...>, ...]
-
-tag_set = item.photo_tags_for(0)
-tag_set.tagged?(:showcase)     # => true
-tag_set.score(:showcase)       # => 0.92
-tag_set.primary_facet          # => :showcase
-tag_set.facets                 # => [:showcase, :detail]
-```
-
-**Order photos by showcase quality:**
-
-```ruby
-ordered = item.photo_tag_sets
-  .sort_by { |pts| -pts.score(:showcase) }
-  .map { |pts| item.photos[pts.photo_index] }
-```
-
-**Select the hero image:**
-
-```ruby
-hero_index = item.photo_tag_sets
-  .max_by { |pts| pts.score(:showcase) }
-  &.photo_index
-
-hero_photo = item.photos[hero_index] if hero_index
-```
-
-**Find photos with identifiers:**
-
-```ruby
-identifier_photos = item.photo_tag_sets
-  .select { |pts| pts.tagged?(:identifier) }
-  .map { |pts| item.photos[pts.photo_index] }
+item.photo_tag_sets       # array of PhotoTagSet, one per photo
+item.photo_tags_for(0)    # tags for photo at index 0
 ```
 
 ### 5.9 Text-to-Speech

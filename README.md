@@ -4,6 +4,16 @@ AI-powered photo identification for Rails. Drop structured attribute extraction 
 
 Built on [ai-loom](https://github.com/your-username/ai-loom) for multi-provider LLM access.
 
+> **First-time setup?** This README is the API reference — every
+> config, callback, error class, Job column, and pattern. If you're
+> integrating ai-lens for the first time, the
+> [Greenfield Integration Guide](GREENFIELD_GUIDE.md) is a focused
+> walkthrough that gets you from "no AI" to "first call working"
+> with minimal noise.
+>
+> **Migrating from 0.2.x?** See [UPGRADING.md](UPGRADING.md) for a
+> step-by-step migration covering every breaking change.
+
 ---
 
 ## Table of Contents
