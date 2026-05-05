@@ -197,7 +197,9 @@ module AiLens
           "(lowercase_snake_case) and a score."
       end
 
-      instructions += "\n\nInclude a \"photo_tags\" array in your JSON response alongside \"extracted_attributes\". " \
+      instructions += "\n\nInclude a \"photo_tags\" array at the top level of your JSON response, " \
+        "alongside the extracted schema fields (do NOT wrap them under any " \
+        "\"extracted_attributes\" key — return all fields at the top level). " \
         "Each entry should have: photo_index (integer), tags (array of {facet, score})"
 
       if config.open_photo_tags

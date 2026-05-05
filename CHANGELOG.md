@@ -4,6 +4,19 @@ All notable changes to ai-lens are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-05-05
+
+### Fixed
+- `photo_tag_instructions` rubric was instructing the LLM to put
+  `photo_tags` "alongside `extracted_attributes`", which many models
+  interpreted as "wrap all extracted fields under an
+  `extracted_attributes` key". The wrapped response then failed
+  schema validation because top-level fields (`name`, `category`,
+  etc.) were missing. The rephrased rubric now explicitly tells the
+  model to return all schema fields at the top level of the JSON
+  object alongside the `photo_tags` array, and to NOT wrap them
+  under any `extracted_attributes` key.
+
 ## [0.5.0] - 2026-05-05
 
 ### Added
