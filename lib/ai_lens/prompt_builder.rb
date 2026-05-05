@@ -247,6 +247,14 @@ module AiLens
       def multiple_items?
         item_mode == :multiple
       end
+
+      def photo_tag_instructions
+        PromptBuilder.new(schema: @schema).send(:photo_tag_instructions)
+      end
+
+      def include_photo_tags?
+        AiLens.configuration.photo_tag_facets.any?
+      end
     end
   end
 end

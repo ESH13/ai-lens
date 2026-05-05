@@ -4,6 +4,27 @@ All notable changes to ai-lens are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-05-05
+
+### Added
+- `PromptBuilder::TemplateContext#photo_tag_instructions` — exposes the
+  facet rubric to custom YAML/ERB prompt templates so hosts using
+  `prompt_template` can include `<%= photo_tag_instructions %>` and have
+  the LLM return populated `photo_tags` arrays. Without this, custom
+  templates silently dropped facet instructions and `photo_tag_sets` was
+  always empty.
+- `PromptBuilder::TemplateContext#include_photo_tags?` — boolean helper
+  for templates that want to gate the facet block conditionally.
+- `ProcessIdentificationJob#router_fallback_chain` — when `config.task`
+  is set, `try_fallback_adapters` now reads the chain from
+  `AiLoom.router.fallback_chain(config.task)` before falling back to
+  `AiLens.configuration.fallback_adapters`. Fixes the case where a host
+  using router-mode adapter selection had no working fallback because
+  `fallback_adapters` was unset.
+
+### Changed
+- No public API changes. Both additions are additive.
+
 ## [0.4.1] - 2026-04-27
 
 ### Fixed

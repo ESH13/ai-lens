@@ -250,6 +250,7 @@ module AiLens
       # Get fallback chain from job's error_details or configuration
       fallback_adapters = job.error_details&.dig("fallback_adapters") ||
                           job.error_details&.dig(:fallback_adapters) ||
+                          router_fallback_chain ||
                           AiLens.configuration.fallback_adapters
 
       tried_adapter = job.adapter.to_sym
@@ -355,6 +356,15 @@ module AiLens
       )
 
       false
+    end
+
+    def router_fallback_chain
+      config = AiLens.configuration
+      return nil unless config.task && defined?(AiLoom) && AiLoom.respond_to?(:router)
+
+      AiLoom.router.fallback_chain(config.task)
+    rescue StandardError
+      nil
     end
 
     def logger

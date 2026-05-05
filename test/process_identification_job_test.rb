@@ -209,4 +209,40 @@ class ProcessIdentificationJobTest < Minitest::Test
     refute_includes tried, "anthropic", "unavailable adapter should not be recorded as tried"
     assert_includes tried, "grok"
   end
+
+  # Task 1.2: when AiLens.configuration.task is set, the fallback chain
+  # is sourced from AiLoom.router.fallback_chain(task) before falling
+  # back to AiLens.configuration.fallback_adapters.
+  def test_router_fallback_chain_used_when_task_configured
+    AiLens.configuration.task = :photo_identification
+    AiLens.configuration.fallback_adapters = []
+
+    fake_router = Object.new
+    fake_router.define_singleton_method(:fallback_chain) do |task|
+      task == :photo_identification ? [:openai, :anthropic] : []
+    end
+
+    AiLoom.singleton_class.alias_method(:_orig_router, :router)
+    AiLoom.define_singleton_method(:router) { fake_router }
+
+    begin
+      job = AiLens::ProcessIdentificationJob.new
+
+      chain = job.send(:router_fallback_chain)
+
+      assert_equal [:openai, :anthropic], chain
+    ensure
+      AiLoom.singleton_class.alias_method(:router, :_orig_router)
+      AiLoom.singleton_class.remove_method(:_orig_router)
+      AiLens.configuration.task = nil
+    end
+  end
+
+  def test_router_fallback_chain_returns_nil_without_task
+    AiLens.configuration.task = nil
+
+    chain = AiLens::ProcessIdentificationJob.new.send(:router_fallback_chain)
+
+    assert_nil chain
+  end
 end

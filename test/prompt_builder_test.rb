@@ -48,4 +48,34 @@ class PromptBuilderTest < Minitest::Test
     assert_includes prompt, "Item name"
     assert_includes prompt, "Item category"
   end
+
+  def test_template_context_exposes_photo_tag_instructions
+    schema = AiLens::Schema.define(name: "test") { |s| s.field :name, type: :string }
+    ctx = AiLens::PromptBuilder::TemplateContext.new(
+      schema: schema,
+      schema_description: "Extract: name",
+      schema_fields: schema.fields,
+      has_feedback: false,
+      has_context: false,
+      photos_mode: :single,
+      item_mode: :single
+    )
+
+    result = ctx.photo_tag_instructions
+
+    assert_includes result, "Tag Facets:"
+    assert_includes result, "identifier:"
+    assert_includes result, "showcase:"
+    assert_includes result, "photo_tags"
+  end
+
+  def test_template_context_include_photo_tags_query
+    schema = AiLens::Schema.define(name: "test") { |s| s.field :name, type: :string }
+    ctx = AiLens::PromptBuilder::TemplateContext.new(
+      schema: schema, schema_description: "x", schema_fields: schema.fields,
+      has_feedback: false, has_context: false, photos_mode: :single, item_mode: :single
+    )
+
+    assert ctx.include_photo_tags?
+  end
 end
