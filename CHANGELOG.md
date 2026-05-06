@@ -4,6 +4,18 @@ All notable changes to ai-lens are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-05-05
+
+### Added
+- `Configuration#photo_tag_facets=` setter — assigning a hash now
+  fully replaces the built-in facet rubric, letting hosts curate the
+  facet set the LLM is asked to classify. The previous
+  `add_photo_tag_facet` helper still works (additive on top of
+  built-ins) when `photo_tag_facets` hasn't been explicitly set.
+  Motivation: hosts that only render a subset of facets in their UI
+  don't need the LLM classifying the rest, which costs tokens and
+  response latency.
+
 ## [0.5.1] - 2026-05-05
 
 ### Fixed

@@ -116,6 +116,42 @@ class EnhancedConfigurationTest < Minitest::Test
     assert_includes facets.keys, :identifier  # built-in
     assert_includes facets.keys, :special     # custom
   end
+
+  def test_photo_tag_facets_setter_replaces_built_in
+    curated = {
+      showcase: "Hero photo",
+      identifier: "Has serial numbers",
+      damage: "Documents wear"
+    }
+    @config.photo_tag_facets = curated
+
+    assert_equal curated, @config.photo_tag_facets
+    refute_includes @config.photo_tag_facets.keys, :detail
+    refute_includes @config.photo_tag_facets.keys, :context
+    refute_includes @config.photo_tag_facets.keys, :documentation
+  end
+
+  def test_photo_tag_facets_setter_overrides_custom_additions
+    @config.add_photo_tag_facet(:rare_marker, "Rare marker")
+    @config.photo_tag_facets = { showcase: "Hero only" }
+
+    assert_equal({ showcase: "Hero only" }, @config.photo_tag_facets)
+    refute_includes @config.photo_tag_facets.keys, :rare_marker
+  end
+
+  def test_photo_tag_facets_setter_normalizes_string_keys
+    @config.photo_tag_facets = { "showcase" => "Hero", "damage" => "Wear" }
+
+    assert_includes @config.photo_tag_facets.keys, :showcase
+    assert_includes @config.photo_tag_facets.keys, :damage
+  end
+
+  def test_photo_tag_facets_setter_nil_falls_back_to_built_ins
+    @config.photo_tag_facets = { showcase: "Custom" }
+    @config.photo_tag_facets = nil
+
+    assert_equal AiLens::Configuration::BUILT_IN_FACETS, @config.photo_tag_facets
+  end
 end
 
 class PromptBuilderPhotoTagsTest < Minitest::Test

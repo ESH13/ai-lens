@@ -97,6 +97,21 @@ module AiLens
       @open_photo_tags = false
       @photo_tag_threshold = 0.3
       @custom_photo_tag_facets = {}
+      @photo_tag_facets = nil
+    end
+
+    # Curated facet rubric override.
+    #
+    # Assigning a Hash here fully replaces the BUILT_IN_FACETS the LLM
+    # is asked to classify. Use this when the host UI only renders a
+    # subset of facets — sending the rest to the model wastes tokens
+    # and inflates response latency.
+    #
+    # When this stays nil (the default), `photo_tag_facets` falls back
+    # to the built-ins merged with any custom facets registered via
+    # `add_photo_tag_facet` (additive, backward-compatible behavior).
+    def photo_tag_facets=(value)
+      @photo_tag_facets = value && value.transform_keys(&:to_sym)
     end
 
     # Read-only resolver for the active default schema.
@@ -146,7 +161,7 @@ module AiLens
     end
 
     def photo_tag_facets
-      BUILT_IN_FACETS.merge(@custom_photo_tag_facets)
+      @photo_tag_facets || BUILT_IN_FACETS.merge(@custom_photo_tag_facets)
     end
   end
 end
